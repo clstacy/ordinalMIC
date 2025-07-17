@@ -24,15 +24,23 @@
 #'   ## Toy ordinal dataset
 #'   set.seed(1)
 #'   fit <- ordinal::clm(score ~ strain * treatment + log1p(conc), data = yeast_df)
-#'   nd  <- expand.grid(strain = levels(yeast_df$strain),
-#'                      treatment = levels(yeast_df$treatment))
-#'   res <- mic_solve(fit, nd, conc_name = "conc")
+#'   res <- mic_solve(fit, conc_name = "conc")
 #'   head(res$ratio_mic_results)
 #' }
 #' @export
-mic_solve <- function(clm_fit, newdata, conc_name,
+mic_solve <- function(clm_fit, newdata = NULL, conc_name,
                       transform_fun = log1p, inv_transform_fun = expm1,
                       alpha = 0.05, compare_pairs = "all") {
+
+  ## --------------------------------------------------------------- ##
+  ## if user omitted newdata, build one from the model’s factor levels
+  if (is.null(newdata)) {
+    if (length(clm_fit$xlevels) == 0)
+      stop("'newdata' is missing and the model has no factor predictors.")
+    newdata <- expand.grid(clm_fit$xlevels, stringsAsFactors = FALSE)
+  }
+  ## --------------------------------------------------------------- ##
+
   .validate_inputs(clm_fit, newdata, conc_name)
 
   if (identical(transform_fun, identity)) {
@@ -41,6 +49,8 @@ mic_solve <- function(clm_fit, newdata, conc_name,
     conc_term <- paste0(deparse(substitute(transform_fun)),
                         "(", conc_name, ")")
   }
+
+  clm_call   <- clm_fit$call
 
   compare_pairs <- match.arg(compare_pairs, choices = c("all", "share_any"))
 
@@ -51,6 +61,8 @@ mic_solve <- function(clm_fit, newdata, conc_name,
 
   trans_name <- paste0(deparse(substitute(transform_fun)), "(", conc_name, ")")
   raw_name   <- conc_name
+
+
 
   if (trans_name %in% beta_names) {
     conc_term <- trans_name
@@ -85,9 +97,11 @@ mic_solve <- function(clm_fit, newdata, conc_name,
   pw <- .pairwise_delta_ratio(res$mic, res$g_mic, log(res$mic),
                               res$g_mic / res$mic, vcv, zcrit,
                               newdata, keep = share)
+
   dod_ratio  <- .difference_of_differences_ratio(log(res$mic),
                                                  res$g_mic / res$mic,
                                                  vcv, zcrit)
+
   dod_delta  <- .difference_of_differences_additive(res$mic, res$g_mic,
                                                     vcv, zcrit)
 
@@ -104,6 +118,7 @@ mic_solve <- function(clm_fit, newdata, conc_name,
       inv_transform_fun   = inv_transform_fun,
       conc_name           = conc_name,
       trans_name          = trans_name,
+      call                = clm_call,
       data                = clm_fit$model
       ),
             class = "mic_solve")

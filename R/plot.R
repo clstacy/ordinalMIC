@@ -1,8 +1,7 @@
 utils::globalVariables(
-  c("MIC", "CI_Lower", "CI_Upper",
-    "Delta_MIC", "Ratio_MIC",
-    "Group1", "Group2", "Estimate",
-    ".color", "Observed")
+  c("MIC", "CI_Lower", "CI_Upper", "Delta_MIC", "Ratio_MIC",
+    "Group1", "Group2", "Estimate", "obs_mic","rep",
+    ".data","pretty_label","x_simplified")
 )
 
 #' autoplot method for mic_solve objects
@@ -14,8 +13,11 @@ utils::globalVariables(
 #' * **"delta"** - forest plot of deltaMIC pairwise differences.
 #' * **"ratio"** - forest plot of MIC ratios (log scale).
 #'
+#' @param x        Variable for x axis plotting
 #' @param object   An object returned by [mic_solve()].
 #' @param type     One of `"mic"`, `"delta"`, or `"ratio"`, `"DoD_delta"`, or `"DoD_ratio"`.
+#' @param color_by Optional column name used to color and dodge replicate
+#'   points. Default: first column in `newdata`.
 #' @param ...      Additional arguments passed to [ggplot2::ggplot()].
 #'
 #' @return A **ggplot** object.
@@ -35,13 +37,15 @@ utils::globalVariables(
 #' @name autoplot.mic_solve
 #' @method autoplot mic_solve
 #' @exportS3Method ggplot2::autoplot mic_solve
+#' @aliases plot.mic_solve
 #' @importFrom ggplot2 autoplot
 #' @importFrom ggplot2 ggplot aes geom_pointrange geom_errorbar theme_minimal labs coord_flip theme element_text scale_y_log10
-
+#' @importFrom stats ave relevel setNames
+#'
 autoplot.mic_solve <- function(object,
                                type = c("mic", "delta", "ratio",
                                         "DoD_delta", "DoD_ratio"),
-                               x = NULL, color_by = NULL, shape_by = NULL,
+                               x = NULL, color_by = NULL,# shape_by = NULL,
                                ...) {
   type <- match.arg(type)
   stopifnot(inherits(object, "mic_solve"))
@@ -59,8 +63,8 @@ autoplot.mic_solve <- function(object,
     if (color_by %in% names(tbl))
       aes_extra$color <- tbl[[color_by]]
       aes_extra$fill <- tbl[[color_by]]
-    if (!is.null(shape_by) && shape_by %in% names(tbl))
-      aes_extra$shape <- tbl[[shape_by]]
+    # if (!is.null(shape_by) && shape_by %in% names(tbl))
+    #   aes_extra$shape <- tbl[[shape_by]]
 
     ## observed MIC per replicate -------------------------------------------
     d      <- object$data                   # raw data used in clm()
@@ -159,7 +163,7 @@ autoplot.mic_solve <- function(object,
                           ) +
       ggplot2::theme_minimal() +
       ggplot2::labs(x = "Group", y = "MIC",
-                    color = color_by, fill = color_by, shape = shape_by,
+                    color = color_by, fill = color_by, #shape = shape_by,
                     title = "Modelled MIC* with observed MICs") +
       ggplot2::theme(legend.position = "bottom")
 
@@ -174,7 +178,7 @@ autoplot.mic_solve <- function(object,
 
     if (is.null(color_by)) color_by <- names(object$newdata)[min(2, ncol(object$newdata))]
 
-    explode <- function(col) {
+    explode_ <- function(col) {
       mat <- do.call(rbind,
                      strsplit(as.character(tbl[[col]]), ":", fixed = TRUE))
       out <- as.data.frame(mat, stringsAsFactors = FALSE)
@@ -182,8 +186,8 @@ autoplot.mic_solve <- function(object,
       out
     }
 
-    left  <- explode("Group1")
-    right <- explode("Group2")
+    left  <- explode_("Group1")
+    right <- explode_("Group2")
     names(left)  <- paste0(vars, "_1")
     names(right) <- paste0(vars, "_2")
     tbl <- cbind(tbl, left, right)
@@ -256,10 +260,10 @@ autoplot.mic_solve <- function(object,
       aes_extra$color <- tbl[[color_by]]
       aes_extra$fill   <- tbl[[color_by]]
     }
-    if (!is.null(shape_by) && shape_by %in% names(g1)) {
-      #tbl[[shape_by]]  <- g1[[shape_by]]
-      aes_extra$shape  <- tbl[[shape_by]]
-    }
+    # if (!is.null(shape_by) && shape_by %in% names(g1)) {
+    #   #tbl[[shape_by]]  <- g1[[shape_by]]
+    #   aes_extra$shape  <- tbl[[shape_by]]
+    # }
 
     pd <- ggplot2::position_dodge(width = 0.6)
 
@@ -277,14 +281,15 @@ autoplot.mic_solve <- function(object,
       ggplot2::geom_errorbar(position = pd, width = 0.25) +
       ggplot2::geom_point(position = pd, size = 2) +
       ggplot2::coord_flip() +
-      ggplot2::facet_wrap(~ forcats::fct_rev(facet), scales = "free_y", dir = "v") +
+      ggplot2::facet_wrap(~ factor(facet, levels = rev(levels(facet))),
+                          scales = "free_y", dir = "v") +
       ggplot2::theme_minimal() +
       ggplot2::labs(x = NULL, y = "delta-MIC (absolute)",
-                    color = color_by, fill = color_by, shape = shape_by,
+                    color = color_by, fill = color_by,# shape = shape_by,
                     title = "Pairwise MIC differences (delta-MIC)") +
       ggplot2::theme(
         strip.text.y = ggplot2::element_text(face = "bold"),
-        legend.position = if (is.null(color_by) && is.null(shape_by))
+        legend.position = if (is.null(color_by)) #&& is.null(shape_by))
           "none" else "bottom"
       )
 
@@ -375,10 +380,10 @@ autoplot.mic_solve <- function(object,
       aes_extra$color <- tbl[[color_by]]
       aes_extra$fill   <- tbl[[color_by]]
     }
-    if (!is.null(shape_by) && shape_by %in% names(g1)) {
-      #tbl[[shape_by]]  <- g1[[shape_by]]
-      aes_extra$shape  <- tbl[[shape_by]]
-    }
+    # if (!is.null(shape_by) && shape_by %in% names(g1)) {
+    #   #tbl[[shape_by]]  <- g1[[shape_by]]
+    #   aes_extra$shape  <- tbl[[shape_by]]
+    # }
 
     pd <- ggplot2::position_dodge(width = 0.6)
 
@@ -396,10 +401,11 @@ autoplot.mic_solve <- function(object,
       ggplot2::geom_errorbar(position = pd, width = 0.25) +
       ggplot2::geom_point(position = pd, size = 2) +
       ggplot2::coord_flip() +
-      ggplot2::facet_wrap(~ forcats::fct_rev(facet), scales = "free_y", dir = "v") +
+      ggplot2::facet_wrap(~ factor(facet, levels = rev(levels(facet))),
+                          scales = "free_y", dir = "v") +
       ggplot2::theme_minimal() +
       ggplot2::labs(x = "Contrast", y = "MIC ratio (log scale)",
-                    fill = color_by, color = color_by, shape = shape_by,
+                    fill = color_by, color = color_by,# shape = shape_by,
            title = "Pairwise log2 MIC*", ...)
 
 
@@ -441,8 +447,8 @@ autoplot.mic_solve <- function(object,
     tbl$pretty_label <- label                  # one row, one label
 
     ## ---------------------------------------------------------------
-    ## 3.  (existing colour logic; keep as-is or simplify)
-    aes_extra <- list(fill = "#3182BD", colour = "#3182BD")
+    ## 3.  (existing color logic; keep as-is or simplify)
+    aes_extra <- list(fill = "#3182BD", color = "#3182BD")
 
     ## ---------------------------------------------------------------
     ## 4.  plot
@@ -455,7 +461,7 @@ autoplot.mic_solve <- function(object,
                    !!!aes_extra)
     ) +
       ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
-                          colour = "grey60") +
+                          color = "grey60") +
       ggplot2::geom_errorbar(width = .25, linewidth = .6) +
       ggplot2::geom_point(size = 3) +
       ggplot2::geom_col(width = 0.5, alpha = 0.35, color = NA) +
@@ -503,8 +509,8 @@ autoplot.mic_solve <- function(object,
     tbl$pretty_label <- label                  # one row, one label
 
     ## ---------------------------------------------------------------
-    ## 3.  (existing colour logic; keep as-is or simplify)
-    aes_extra <- list(fill = "#3182BD", colour = "#3182BD")
+    ## 3.  (existing color logic; keep as-is or simplify)
+    aes_extra <- list(fill = "#3182BD", color = "#3182BD")
 
     ## ---------------------------------------------------------------
     ## 4.  plot
@@ -517,7 +523,7 @@ autoplot.mic_solve <- function(object,
                    !!!aes_extra)
     ) +
       ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
-                          colour = "grey60") +
+                          color = "grey60") +
       ggplot2::geom_errorbar(width = .25, linewidth = .6) +
       ggplot2::geom_point(size = 3) +
       ggplot2::geom_col(width = 0.5, alpha = 0.35, color = NA) +

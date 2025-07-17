@@ -2,6 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{autoplot.mic_solve}
 \alias{autoplot.mic_solve}
+\alias{plot.mic_solve}
 \title{autoplot method for mic_solve objects}
 \usage{
 \method{autoplot}{mic_solve}(
@@ -9,7 +10,6 @@
   type = c("mic", "delta", "ratio", "DoD_delta", "DoD_ratio"),
   x = NULL,
   color_by = NULL,
-  shape_by = NULL,
   ...
 )
 }
@@ -17,6 +17,11 @@
 \item{object}{An object returned by \code{\link[=mic_solve]{mic_solve()}}.}
 
 \item{type}{One of \code{"mic"}, \code{"delta"}, or \code{"ratio"}, \code{"DoD_delta"}, or \code{"DoD_ratio"}.}
+
+\item{x}{Variable for x axis plotting}
+
+\item{color_by}{Optional column name used to color and dodge replicate
+points. Default: first column in \code{newdata}.}
 
 \item{...}{Additional arguments passed to \code{\link[ggplot2:ggplot]{ggplot2::ggplot()}}.}
 }

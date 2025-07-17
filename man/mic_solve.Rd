@@ -6,7 +6,7 @@
 \usage{
 mic_solve(
   clm_fit,
-  newdata,
+  newdata = NULL,
   conc_name,
   transform_fun = log1p,
   inv_transform_fun = expm1,
@@ -51,9 +51,7 @@ if (requireNamespace("ordinal", quietly = TRUE)) {
   ## Toy ordinal dataset
   set.seed(1)
   fit <- ordinal::clm(score ~ strain * treatment + log1p(conc), data = yeast_df)
-  nd  <- expand.grid(strain = levels(yeast_df$strain),
-                     treatment = levels(yeast_df$treatment))
-  res <- mic_solve(fit, nd, conc_name = "conc")
+  res <- mic_solve(fit, conc_name = "conc")
   head(res$ratio_mic_results)
 }
 }
