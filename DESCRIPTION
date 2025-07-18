@@ -11,11 +11,11 @@ Imports:
     ggplot2,
     stats,
     utils,
-    cli
+    cli,
+    tibble
 Suggests:
     ordinal,
-    testthat (>= 3.0.0),
-    tibble
+    testthat (>= 3.0.0)
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true

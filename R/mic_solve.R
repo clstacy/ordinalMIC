@@ -100,14 +100,14 @@ mic_solve <- function(clm_fit, newdata = NULL, conc_name,
 
   dod_ratio  <- .difference_of_differences_ratio(log(res$mic),
                                                  res$g_mic / res$mic,
-                                                 vcv, zcrit)
+                                                 vcv, zcrit, mic_df)
 
   dod_delta  <- .difference_of_differences_additive(res$mic, res$g_mic,
-                                                    vcv, zcrit)
+                                                    vcv, zcrit, mic_df)
 
   structure(
     list(
-      mic_estimates   = mic_df,
+      mic_estimates       = mic_df,
       delta_mic_results   = pw$delta,
       ratio_mic_results   = pw$ratio,
       dod_delta_results   = dod_delta,

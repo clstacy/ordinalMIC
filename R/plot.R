@@ -129,12 +129,13 @@ autoplot.mic_solve <- function(object,
                             data = obs_tbl_observed,
                             ggplot2::aes(x = obs_tbl_observed[[x]],
                                          y = obs_tbl_observed[[object$conc_name]],
+                                         # color = obs_tbl_observed[[color_by]],
                                          fill = obs_tbl_observed[[color_by]],
                                          group = interaction(obs_tbl[[x]],
                                                              obs_tbl[[color_by]]),
                             ),inherit.aes = FALSE,
                             binaxis = "y",      # Stack dots along the y-axis
-                            # color = "black",
+                            color = "black",
                             stackdir = "center", # Stack direction
                             dotsize = 0.5,      # Size of the dots
                             binwidth = max(obs_tbl[object$conc_name]/30),
@@ -145,6 +146,7 @@ autoplot.mic_solve <- function(object,
         data = obs_tbl_censored,
         ggplot2::aes(x = obs_tbl_censored[[x]],
                      y = obs_tbl_censored[[object$conc_name]],
+                     #color = obs_tbl_censored[[color_by]],
                      fill = obs_tbl_censored[[color_by]],
                      group = interaction(obs_tbl[[x]],
                                          obs_tbl[[color_by]] )
@@ -422,6 +424,7 @@ autoplot.mic_solve <- function(object,
     #   ggplot2::theme_minimal() + ggplot2::coord_flip() +
     #   ggplot2::labs(x = "DoD FC", y = "DoD ratio (log scale)",
     #                 title = "Difference of Differences", ...)
+    ## ------------------Function to get pairs--------------------------------
 
     tbl  <- object$dod_ratio_results          # usually one row
     vars <- names(object$newdata)             # e.g. c("strain","treatment")

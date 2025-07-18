@@ -4,7 +4,7 @@ print.mic_solve <- function(x, ...) {
   cat("Call  : ", deparse(x$call), "\n\n")
 
   g <- nrow(x$mic_estimates)
-  cat("Groups:", g,   "(", paste(names(x$newdata), collapse = " × "), ")\n")
+  cat("Groups:", g,   "(", paste(names(x$newdata), collapse = " x "), ")\n")
   cat("Alpha : ", attr(x$mic_estimates, "alpha"), "\n")
   cat("Link  : ", if (identical(x$transform_fun, identity)) "identity"
       else deparse(x$transform_fun), "\n\n")
