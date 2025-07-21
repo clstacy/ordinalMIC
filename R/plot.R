@@ -1,7 +1,7 @@
 utils::globalVariables(
   c("MIC", "CI_Lower", "CI_Upper", "Delta_MIC", "Ratio_MIC",
     "Group1", "Group2", "Estimate", "obs_mic","rep",
-    ".data","pretty_label","x_simplified")
+    ".data","pretty_label","x_simplified", "vars")
 )
 
 #' autoplot method for mic_solve objects
@@ -205,12 +205,12 @@ autoplot.mic_solve <- function(object,
       )
     }
 
-    explode <- function(x) {
-      m <- do.call(rbind, strsplit(as.character(x),  ":", fixed = TRUE))
-      out <- as.data.frame(m, stringsAsFactors = FALSE)
-      names(out) <- vars
-      out
-    }
+    # explode <- function(x) {
+    #   m <- do.call(rbind, strsplit(as.character(x),  ":", fixed = TRUE))
+    #   out <- as.data.frame(m, stringsAsFactors = FALSE)
+    #   names(out) <- vars
+    #   out
+    # }
     g1 <- explode(tbl$Group1)
     g2 <- explode(tbl$Group2)
 
@@ -262,10 +262,6 @@ autoplot.mic_solve <- function(object,
       aes_extra$color <- tbl[[color_by]]
       aes_extra$fill   <- tbl[[color_by]]
     }
-    # if (!is.null(shape_by) && shape_by %in% names(g1)) {
-    #   #tbl[[shape_by]]  <- g1[[shape_by]]
-    #   aes_extra$shape  <- tbl[[shape_by]]
-    # }
 
     pd <- ggplot2::position_dodge(width = 0.6)
 
@@ -303,7 +299,7 @@ autoplot.mic_solve <- function(object,
     ## 1.  explode Group1 / Group2 into factor columns
     vars <- names(object$newdata)              # e.g. "strain", "treatment"
     if (is.null(color_by)) color_by <- names(object$newdata)[min(2, ncol(object$newdata))]
-    explode <- function(col) {
+    explode_mic <- function(col) {
       mat <- do.call(rbind,
                      strsplit(as.character(tbl[[col]]), ":", fixed = TRUE))
       out <- as.data.frame(mat, stringsAsFactors = FALSE)
@@ -311,8 +307,8 @@ autoplot.mic_solve <- function(object,
       out
     }
 
-    left  <- explode("Group1")
-    right <- explode("Group2")
+    left  <- explode_mic("Group1")
+    right <- explode_mic("Group2")
     names(left)  <- paste0(vars, "_1")
     names(right) <- paste0(vars, "_2")
     tbl <- cbind(tbl, left, right)
@@ -328,12 +324,7 @@ autoplot.mic_solve <- function(object,
       )
     }
 
-    explode <- function(x) {
-      m <- do.call(rbind, strsplit(as.character(x),  ":", fixed = TRUE))
-      out <- as.data.frame(m, stringsAsFactors = FALSE)
-      names(out) <- vars
-      out
-    }
+
     g1 <- explode(tbl$Group1)
     g2 <- explode(tbl$Group2)
 
@@ -382,10 +373,6 @@ autoplot.mic_solve <- function(object,
       aes_extra$color <- tbl[[color_by]]
       aes_extra$fill   <- tbl[[color_by]]
     }
-    # if (!is.null(shape_by) && shape_by %in% names(g1)) {
-    #   #tbl[[shape_by]]  <- g1[[shape_by]]
-    #   aes_extra$shape  <- tbl[[shape_by]]
-    # }
 
     pd <- ggplot2::position_dodge(width = 0.6)
 
@@ -416,48 +403,18 @@ autoplot.mic_solve <- function(object,
 
 
   } else if (type == "DoD_ratio") {
-    # dat <- object$dod_ratio_results
-    # ggplot2::ggplot(dat, ggplot2::aes(x = "Change in\ Response",
-    #                                   y = log2(Estimate), ymin = log2(CI_Lower), ymax = log2(CI_Upper))) +
-    #   ggplot2::geom_pointrange() +
-    #   #ggplot2::scale_y_log10() +
-    #   ggplot2::theme_minimal() + ggplot2::coord_flip() +
-    #   ggplot2::labs(x = "DoD FC", y = "DoD ratio (log scale)",
-    #                 title = "Difference of Differences", ...)
     ## ------------------Function to get pairs--------------------------------
-
     tbl  <- object$dod_ratio_results          # usually one row
     vars <- names(object$newdata)             # e.g. c("strain","treatment")
-
     ## ---------------------------------------------------------------
-    ## 1.  recover the four corner groups in the 2x2 factorial design
-    g1 <- strsplit(object$delta_mic_results$Group1[1], ":", fixed = TRUE)[[1]]
-    g2 <- strsplit(object$delta_mic_results$Group2[2], ":", fixed = TRUE)[[1]]
-    # g1 = baseline (WT / None), g2 = other corner (Mut / Salt)
-
-    baseline <- setNames(g1, vars)            # WT , None
-    contrast <- setNames(g2, vars)            # Mut, Salt
-
-    ## ---------------------------------------------------------------
-    ## 2.  build a descriptive label
-    label <- sprintf(
-      "%s - %s vs. %s - %s",
-      #vars[2],             # treatment (column 2 of newdata)
-      contrast[vars[2]], baseline[vars[2]],
-      # vars[1],             # strain (column 1 of newdata)
-      contrast[vars[1]], baseline[vars[1]]
-    )
-    tbl$pretty_label <- label                  # one row, one label
-
-    ## ---------------------------------------------------------------
-    ## 3.  (existing color logic; keep as-is or simplify)
+    ## 3.  aesthetic options
     aes_extra <- list(fill = "#3182BD", color = "#3182BD")
 
     ## ---------------------------------------------------------------
     ## 4.  plot
     ggplot2::ggplot(
       tbl,
-      ggplot2::aes(x = pretty_label,
+      ggplot2::aes(x = .data[["label"]],
                    y = log2(Estimate),
                    ymin = log2(CI_Lower),
                    ymax = log2(CI_Upper),
@@ -481,45 +438,16 @@ autoplot.mic_solve <- function(object,
 
 
   } else if (type == "DoD_delta") {
-    # dat <- object$dod_delta_results
-    # ggplot2::ggplot(dat, ggplot2::aes(x = "Change in\ Response",
-    #                                   y = Estimate, ymin = CI_Lower, ymax = CI_Upper)) +
-    #   ggplot2::geom_pointrange() +
-    #   ggplot2::theme_minimal() + ggplot2::coord_flip() +
-    #   ggplot2::labs(x = "DoD MIC*", y = "DoD delta (absolute)",
-    #                 title = "Difference of Differences", ...)
+
     tbl  <- object$dod_delta_results          # usually one row
     vars <- names(object$newdata)             # e.g. c("strain","treatment")
 
-    ## ---------------------------------------------------------------
-    ## 1.  recover the four corner groups in the 2x2 factorial design
-    g1 <- strsplit(object$delta_mic_results$Group1[1], ":", fixed = TRUE)[[1]]
-    g2 <- strsplit(object$delta_mic_results$Group2[2], ":", fixed = TRUE)[[1]]
-    # g1 = baseline (WT / None), g2 = other corner (Mut / Salt)
-
-    baseline <- setNames(g1, vars)            # WT , None
-    contrast <- setNames(g2, vars)            # Mut, Salt
-
-    ## ---------------------------------------------------------------
-    ## 2.  build a descriptive label
-    label <- sprintf(
-      "%s - %s vs. %s - %s",
-      #vars[2],             # treatment (column 2 of newdata)
-      contrast[vars[2]], baseline[vars[2]],
-      # vars[1],             # strain (column 1 of newdata)
-      contrast[vars[1]], baseline[vars[1]]
-    )
-    tbl$pretty_label <- label                  # one row, one label
-
-    ## ---------------------------------------------------------------
-    ## 3.  (existing color logic; keep as-is or simplify)
     aes_extra <- list(fill = "#3182BD", color = "#3182BD")
 
-    ## ---------------------------------------------------------------
-    ## 4.  plot
+    ####  plot
     ggplot2::ggplot(
       tbl,
-      ggplot2::aes(x = pretty_label,
+      ggplot2::aes(x = .data[["label"]],
                    y = log2(exp(Estimate)),
                    ymin = log2(exp(CI_Lower)),
                    ymax = log2(exp(CI_Upper)),

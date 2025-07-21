@@ -1,61 +1,20 @@
-#' #' Make a concise DoD label from two group level vectors
-#' #' @param g1,g2 named character vectors of factor levels
-#' #' @return single character string, eg  "strain: Mut-WT | treatment: Salt–Mock"
-#' #' @noRd
-#' .make_dod_label <- function(g1, g2) {
-#'   vars <- names(g1)
-#'   dif  <- vars[g1 != g2]
-#'   if (length(dif) == 0) {
-#'     "no difference"
-#'   } else {
-#'     paste(
-#'       sprintf("%s: %s\u2013%s", dif, g2[dif], g1[dif]),   # em-dash
-#'       collapse = " | ")
-#'   }
-#' }
-
-#' Build a readable label for a 2×2 difference-of-differences
-#'
-#' @param groups character vector length 4, in the order:
-#'   1 = (low1, low2), 2 = (high1, low2),
-#'   3 = (low1, high2), 4 = (high1, high2)
-#' @param sep    separator used inside each group string (default ":")
-#' @return a single character string
-#' @noRd
-# .dod_make_label <- function(groups, sep = ":") {
-#   if (length(groups) != 4L) return(NA_character_)
-#
-#   # split "WT:None" → c("WT","None"), keep the original variable names if present
-#   split_g <- strsplit(groups, sep, fixed = TRUE)
-#   nvars   <- length(split_g[[1L]])
-#   if (!all(vapply(split_g, length, integer(1)) == nvars))
-#     stop("All group strings must have the same number of factors.")
-#
-#   # if names are present in mic_solve$newdata, use them; else V1, V2, …
-#   vars <- names(split_g[[1L]])
-#   if (is.null(vars)) vars <- paste0("V", seq_len(nvars))
-#
-#   g1 <- split_g[[1L]]     # baseline corner
-#   g4 <- split_g[[4L]]     # opposite corner
-#   names(g1) <- names(g4) <- vars
-#
-#   diff_vars <- vars[g1 != g4]
-#
-#   if (length(diff_vars) == 0) {
-#     "no difference"
-#   } else if (length(diff_vars) == 1) {
-#     v <- diff_vars
-#     sprintf("%s: %s \u2013 %s", v, g4[[v]], g1[[v]])   # en-dash
-#   } else {
-#     # two or more factors changed → show full group strings
-#     sprintf("%s \u2013 %s", groups[1L], groups[4L])
-#   }
-# }
-
-
+#' .dod_all_base (internal)
+#' Ratio-of-ratios (multiplicative DoD) for 2×2 designs.
+#' @param mic_tbl  Data frame with MIC estimates and design factors.
+#' @param mic_col  Name of the MIC column in `mic_tbl` (default `"MIC"`).
+#' @return A data frame with columns:
+#'   * `f1`, `f2` – factor names of the two design factors
+#'   * `low1`, `high1` – levels of the first factor
+#'   * `low2`, `high2` – levels of the second factor
+#'   * `ratio` – ratio of ratios (DoD)
+#'   * `log2_ratio` – log2 of the ratio
+#'   * `label` – a human-readable label for the comparison
+#' @keywords internal
 #' @noRd
 .dod_all_base <- function(mic_tbl, mic_col = "MIC") {
 
+  # remove SE and CI columns from mic table
+  mic_tbl <- mic_tbl[, c(mic_col, setdiff(names(mic_tbl), c(mic_col, "SE_LP", "CI_Lower", "CI_Upper")))]
   vars <- setdiff(names(mic_tbl), mic_col)   # every design column
   if (length(vars) < 2L)
     stop("Need at least two design factors for a DoD.")
@@ -112,13 +71,13 @@
             low2  = lv2[c], high2 = lv2[d],
             ratio = ratio,
             log2_ratio = log2(ratio),
-            label = sprintf("%s-%s vs. %s-%s",
+            label = sprintf("%s - %s vs. %s - %s",
                             #v1,
-                            lv1[a],
                             lv1[b],
+                            lv1[a],
                             #v2,
-                            lv2[c],
-                            lv2[d]),
+                            lv2[d],
+                            lv2[c]),
             stringsAsFactors = FALSE
           )
         }
@@ -128,21 +87,17 @@
   if (k == 0L) stop("No 2x2 sub-grids found that have >=2 levels per factor.")
   do.call(rbind, out)
 }
-## ---------------------------------------------------------------
-# is_design <- vapply(object$mic_estimates,     # logical vector
-#                     function(col) !(is.numeric(col) || is.integer(col)),
-#                     logical(1))
 
-#vars     <- names(object$mic_estimates)[is_design]      # e.g. "strain","treatment"
+#' Explode a colon-separated string into a data frame.
+#' This function takes a character vector where each element contains
+#' multiple values separated by colons (":") and splits them into a data frame.
+#' @param x A character vector with colon-separated values.
+#' @return A data frame with each column corresponding to a part of the colon-separated values.
+#' @keywords internal
+explode <- function(x) {
+  m <- do.call(rbind, strsplit(as.character(x),  ":", fixed = TRUE))
+  out <- as.data.frame(m, stringsAsFactors = FALSE)
+  names(out) <- vars
+  out
+}
 
-#
-#
-# tbl  <- object$dod_ratio_results          # usually one row
-# vars <- names(object$newdata)             # e.g. c("strain","treatment")
-#
-# mic_tbl  <- object$mic_estimates[c(vars, "MIC")]
-#
-# dod_tbl <- dod_all_base(mic_tbl, mic_col = "MIC")
-#
-# tbl <- merge(tbl, dod_tbl, by = c("f1", "f2", "low1", "high1", "low2", "high2"),
-#              all.x = TRUE, sort = FALSE)

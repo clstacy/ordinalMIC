@@ -107,7 +107,7 @@ mic_solve <- function(clm_fit, newdata = NULL, conc_name,
 
   structure(
     list(
-      mic_estimates       = mic_df,
+      mic_estimates   = mic_df,
       delta_mic_results   = pw$delta,
       ratio_mic_results   = pw$ratio,
       dod_delta_results   = dod_delta,

@@ -15,7 +15,8 @@
                         mic_tbl = mic_df,
                         mic_col = "MIC"
                       )
-    merge(
+
+    cbind(
        comparison_df,
        data.frame(
          Estimate = exp(l_int), SE_logDoD = se_i,
@@ -55,3 +56,4 @@
               )
    )
  }
+

@@ -1,4 +1,11 @@
+#' tidy method for mic_solve objects
 #' @importFrom tibble tibble
+#' @importFrom tibble as_tibble
+#' @param x An object of class `mic_solve`.
+#' @param table A character string specifying which table to return.
+#'   Options are `"mic"`, `"delta"`, `"ratio"`, `"DoD_delta"`, and `"DoD_ratio"`.
+#' @param ... Additional arguments (not used).
+#' @return A tibble containing the requested table from the `mic_solve` object.
 #' @export
 tidy.mic_solve <- function(x, table = c("mic", "delta", "ratio",
                                         "DoD_delta", "DoD_ratio"), ...) {
