@@ -88,16 +88,5 @@
   do.call(rbind, out)
 }
 
-#' Explode a colon-separated string into a data frame.
-#' This function takes a character vector where each element contains
-#' multiple values separated by colons (":") and splits them into a data frame.
-#' @param x A character vector with colon-separated values.
-#' @return A data frame with each column corresponding to a part of the colon-separated values.
-#' @keywords internal
-explode <- function(x) {
-  m <- do.call(rbind, strsplit(as.character(x),  ":", fixed = TRUE))
-  out <- as.data.frame(m, stringsAsFactors = FALSE)
-  names(out) <- vars
-  out
-}
+
 

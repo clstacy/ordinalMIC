@@ -40,7 +40,7 @@ utils::globalVariables(
 #' @aliases plot.mic_solve
 #' @importFrom ggplot2 autoplot
 #' @importFrom ggplot2 ggplot aes geom_pointrange geom_errorbar theme_minimal labs coord_flip theme element_text scale_y_log10
-#' @importFrom stats ave relevel setNames
+#' @importFrom stats ave relevel setNames formula terms
 #'
 autoplot.mic_solve <- function(object,
                                type = c("mic", "delta", "ratio",
@@ -61,8 +61,11 @@ autoplot.mic_solve <- function(object,
     if (is.null(color_by)) color_by <- names(object$newdata)[min(2, ncol(object$newdata))]
     aes_extra <- list()
     if (color_by %in% names(tbl))
-      aes_extra$color <- tbl[[color_by]]
-      aes_extra$fill <- tbl[[color_by]]
+      aes_extra$color <- factor(tbl[[color_by]],
+                                levels = levels(object$data[[color_by]]))
+      aes_extra$fill <- #tbl[[color_by]]
+        factor(tbl[[color_by]],
+               levels = levels(object$data[[color_by]]))
     # if (!is.null(shape_by) && shape_by %in% names(tbl))
     #   aes_extra$shape <- tbl[[shape_by]]
 
@@ -89,9 +92,11 @@ autoplot.mic_solve <- function(object,
 
     split_data <- split(d, d$grp_key)
 
+    score_var = as.character(attr(terms(formula(d)), "variables")[[2]])
+
     selected_rows <- lapply(split_data, function(group_df) {
       # Filter for minimum score
-      filtered_df <- group_df[group_df$score > min(group_df$score), ]
+      filtered_df <- group_df[group_df[,score_var] > min(group_df[,score_var]), ]
       # Arrange by conc_var
       arranged_df <- filtered_df[order(filtered_df[[conc_col]],decreasing = T), ]
       # Select the first row
@@ -124,12 +129,13 @@ autoplot.mic_solve <- function(object,
                                  y = MIC, ymin = CI_Lower, ymax = CI_Upper,
                                  !!!aes_extra)) +
       ggplot2::geom_col(position = pd, width = 0.5, alpha=0.5, color = NA) +
-      ggplot2::geom_pointrange(position = pd, size = 0.25, alpha=1) +
+      # ggplot2::geom_pointrange(position = pd, size = 0.25, alpha=1) +
+      ggplot2::geom_errorbar(position = pd, width = 0.25) +
       ggplot2::geom_dotplot(
                             data = obs_tbl_observed,
                             ggplot2::aes(x = obs_tbl_observed[[x]],
                                          y = obs_tbl_observed[[object$conc_name]],
-                                         # color = obs_tbl_observed[[color_by]],
+                                         color = obs_tbl_observed[[color_by]],
                                          fill = obs_tbl_observed[[color_by]],
                                          group = interaction(obs_tbl[[x]],
                                                              obs_tbl[[color_by]]),
@@ -146,7 +152,7 @@ autoplot.mic_solve <- function(object,
         data = obs_tbl_censored,
         ggplot2::aes(x = obs_tbl_censored[[x]],
                      y = obs_tbl_censored[[object$conc_name]],
-                     #color = obs_tbl_censored[[color_by]],
+                     color = obs_tbl_censored[[color_by]],
                      fill = obs_tbl_censored[[color_by]],
                      group = interaction(obs_tbl[[x]],
                                          obs_tbl[[color_by]] )
@@ -160,6 +166,8 @@ autoplot.mic_solve <- function(object,
         binwidth = max(obs_tbl[object$conc_name]/30),
         position = ggplot2::position_dodge(width = pd$width)
       ) +
+      # ggplot2::scale_color_manual(values = levels(object$model$model[[color_by]])) +
+      # ggplot2::scale_fill_manual(values = levels(object$model$model[[color_by]])) +
       ggplot2::coord_flip(ylim = c(0,#max(obs_tbl[object$conc_name])
                                    NA)
                           ) +
@@ -180,7 +188,7 @@ autoplot.mic_solve <- function(object,
 
     if (is.null(color_by)) color_by <- names(object$newdata)[min(2, ncol(object$newdata))]
 
-    explode_ <- function(col) {
+    explode_delta <- function(col) {
       mat <- do.call(rbind,
                      strsplit(as.character(tbl[[col]]), ":", fixed = TRUE))
       out <- as.data.frame(mat, stringsAsFactors = FALSE)
@@ -188,8 +196,8 @@ autoplot.mic_solve <- function(object,
       out
     }
 
-    left  <- explode_("Group1")
-    right <- explode_("Group2")
+    left  <- explode_delta("Group1")
+    right <- explode_delta("Group2")
     names(left)  <- paste0(vars, "_1")
     names(right) <- paste0(vars, "_2")
     tbl <- cbind(tbl, left, right)
@@ -205,12 +213,13 @@ autoplot.mic_solve <- function(object,
       )
     }
 
-    # explode <- function(x) {
-    #   m <- do.call(rbind, strsplit(as.character(x),  ":", fixed = TRUE))
-    #   out <- as.data.frame(m, stringsAsFactors = FALSE)
-    #   names(out) <- vars
-    #   out
-    # }
+    explode <- function(x) {
+      m <- do.call(rbind, strsplit(as.character(x),  ":", fixed = TRUE))
+      out <- as.data.frame(m, stringsAsFactors = FALSE)
+      names(out) <- vars
+      out
+    }
+
     g1 <- explode(tbl$Group1)
     g2 <- explode(tbl$Group2)
 
@@ -234,15 +243,26 @@ autoplot.mic_solve <- function(object,
       function(i) {
         dif <- vars[g1[i, ] != g2[i, ]]
         sam <- vars[g1[i, ] == g2[i, ]]
+        if (length(sam) == 0) sam <- NA  # if g2 and g1 are empty
         if (length(dif) == 0) {                 # all covariates same
           "no-diff"
         } else if (length(dif) == 1) {          # exactly one differs
-          sprintf("%s: %s\n%s: %s - %s",
-                  sam,
-                  g2[i, sam],                   # "new" level (Group2)
-                  dif,
-                  g2[i, dif],                   # Group2 level first
-                  g1[i, dif])                   # baseline (Group1)
+          if (is.na(sam)) {
+            # if g2 and g1 are empty
+            sprintf("%s: %s - %s",
+                    dif,
+                    g2[i, dif],
+                    g1[i, dif])                   # baseline (Group1)
+            } else {
+            # if g2 and g1 are not empty
+            sprintf("%s: %s\n%s: %s - %s",
+                    sam,
+                    g2[i, sam],                   # "new" level (Group2)
+                    dif,
+                    g2[i, dif],                   # Group2 level first
+                    g1[i, dif])                   # baseline (Group1)
+
+            }
         } else {                                # >1 covariate differ
           paste(
                 paste(g1[i, vars], collapse = ":"),#"",
@@ -295,6 +315,10 @@ autoplot.mic_solve <- function(object,
   } else if (type == "ratio") {                           # ratio plot
     tbl <- object$ratio_mic_results
 
+    if (is.null(tbl)) {
+      stop("No pairwise MIC ratios found. Check that the model has at least two levels for each factor.")
+    }
+
     ## --------------------------------------------------------------- ##
     ## 1.  explode Group1 / Group2 into factor columns
     vars <- names(object$newdata)              # e.g. "strain", "treatment"
@@ -345,15 +369,25 @@ autoplot.mic_solve <- function(object,
       function(i) {
         dif <- vars[g1[i, ] != g2[i, ]]
         sam <- vars[g1[i, ] == g2[i, ]]
+        if (length(sam) == 0) sam <- NA  # if g2 and g1 are empty
         if (length(dif) == 0) {                 # all covariates same
           "no-diff"
         } else if (length(dif) == 1) {          # exactly one differs
-          sprintf("%s: %s\n%s: %s - %s",
-                  sam,
-                  g2[i, sam],                   # "new" level (Group2)
-                  dif,
-                  g2[i, dif],                   # Group2 level first
-                  g1[i, dif])                   # baseline (Group1)
+          if (is.na(sam)) {
+            # if g2 and g1 are empty
+            sprintf("%s: %s - %s",
+                    dif,
+                    g2[i, dif],
+                    g1[i, dif])                   # baseline (Group1)
+          } else {
+            # if g2 and g1 are not empty
+            sprintf("%s: %s\n%s: %s - %s",
+                    sam,
+                    g2[i, sam],                   # "new" level (Group2)
+                    dif,
+                    g2[i, dif],                   # Group2 level first
+                    g1[i, dif])                   # baseline (Group1)
+          }
         } else {                                # >1 covariate differ
           paste(
             paste(g1[i, vars], collapse = ":"),#"",
@@ -406,6 +440,11 @@ autoplot.mic_solve <- function(object,
     ## ------------------Function to get pairs--------------------------------
     tbl  <- object$dod_ratio_results          # usually one row
     vars <- names(object$newdata)             # e.g. c("strain","treatment")
+
+    if (nrow(tbl) == 0L) {
+      stop("No pairwise difference of difference ratios found. Check that the model has at least two factors.")
+    }
+
     ## ---------------------------------------------------------------
     ## 3.  aesthetic options
     aes_extra <- list(fill = "#3182BD", color = "#3182BD")
@@ -441,6 +480,10 @@ autoplot.mic_solve <- function(object,
 
     tbl  <- object$dod_delta_results          # usually one row
     vars <- names(object$newdata)             # e.g. c("strain","treatment")
+
+    if (is.null(tbl)) {
+      stop("No pairwise difference of differences found. Check that the model has at least two factors.")
+    }
 
     aes_extra <- list(fill = "#3182BD", color = "#3182BD")
 
