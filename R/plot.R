@@ -348,6 +348,12 @@ autoplot.mic_solve <- function(object,
       )
     }
 
+    explode <- function(x) {
+      m <- do.call(rbind, strsplit(as.character(x),  ":", fixed = TRUE))
+      out <- as.data.frame(m, stringsAsFactors = FALSE)
+      names(out) <- vars
+      out
+    }
 
     g1 <- explode(tbl$Group1)
     g2 <- explode(tbl$Group2)
@@ -363,38 +369,103 @@ autoplot.mic_solve <- function(object,
 
     tbl$facet <- relevel(as.factor(tbl$facet), "Effect of other")  # put "all" first
 
-    tbl$x_simplified <- vapply(
+    # tbl$x_simplified <- vapply(
+    #   seq_len(nrow(tbl)),
+    #   FUN.VALUE = character(1),
+    #   function(i) {
+    #     dif <- vars[g1[i, ] != g2[i, ]]
+    #     sam <- vars[g1[i, ] == g2[i, ]]
+    #     if (length(sam) == 0) sam <- NA  # if g2 and g1 are empty
+    #     if (length(dif) == 0) {                 # all covariates same
+    #       "no-diff"
+    #     } else if (length(dif) == 1) {          # exactly one differs
+    #       if (is.na(sam)) {
+    #         # if g2 and g1 are empty
+    #         sprintf("%s: %s - %s",
+    #                 dif,
+    #                 g2[i, dif],
+    #                 g1[i, dif])                   # baseline (Group1)
+    #       } else {
+    #         # if g2 and g1 are not empty
+    #         sprintf("%s: %s\n%s: %s - %s",
+    #                 sam,
+    #                 g2[i, sam],                   # "new" level (Group2)
+    #                 dif,
+    #                 g2[i, dif],                   # Group2 level first
+    #                 g1[i, dif])                   # baseline (Group1)
+    #       }
+    #     } else {                                # >1 covariate differ
+    #       paste(
+    #         paste(g1[i, vars], collapse = ":"),#"",
+    #         paste(g2[i, vars], collapse = ":"),
+    #         sep = " - ")
+    #     }
+    #   }
+    # )
+
+    # attempted fix for simplified x:
+
+    tbl$x_simplified <- sapply(
       seq_len(nrow(tbl)),
-      FUN.VALUE = character(1),
       function(i) {
-        dif <- vars[g1[i, ] != g2[i, ]]
-        sam <- vars[g1[i, ] == g2[i, ]]
-        if (length(sam) == 0) sam <- NA  # if g2 and g1 are empty
-        if (length(dif) == 0) {                 # all covariates same
-          "no-diff"
-        } else if (length(dif) == 1) {          # exactly one differs
-          if (is.na(sam)) {
-            # if g2 and g1 are empty
-            sprintf("%s: %s - %s",
-                    dif,
-                    g2[i, dif],
-                    g1[i, dif])                   # baseline (Group1)
-          } else {
-            # if g2 and g1 are not empty
-            sprintf("%s: %s\n%s: %s - %s",
-                    sam,
-                    g2[i, sam],                   # "new" level (Group2)
-                    dif,
-                    g2[i, dif],                   # Group2 level first
-                    g1[i, dif])                   # baseline (Group1)
-          }
-        } else {                                # >1 covariate differ
-          paste(
-            paste(g1[i, vars], collapse = ":"),#"",
-            paste(g2[i, vars], collapse = ":"),
-            sep = " - ")
+        # Use the actual vars that correspond to your model factors
+        valid_vars <- vars[vars %in% names(g1) & vars %in% names(g2)]
+
+        if (length(valid_vars) == 0) {
+          return("no-vars")
         }
-      }
+
+        # Find which variables differ and which are the same
+        dif <- character(0)
+        sam <- character(0)
+
+        for (var in valid_vars) {
+          g1_val <- g1[i, var]
+          g2_val <- g2[i, var]
+
+          # Skip if either value is NA or empty
+          if (is.na(g1_val) || is.na(g2_val) ||
+              length(g1_val) == 0 || length(g2_val) == 0) {
+            next
+          }
+
+          if (g1_val == g2_val) {
+            sam <- c(sam, var)
+          } else {
+            dif <- c(dif, var)
+          }
+        }
+
+        if (length(dif) == 0) {
+          # All variables are the same
+          "no-diff"
+        } else if (length(dif) == 1) {
+          # Exactly one variable differs
+          g1_val <- g1[i, dif]
+          g2_val <- g2[i, dif]
+
+          if (length(sam) == 0) {
+            # No variables are the same
+            sprintf("%s: %s vs. %s", dif, g2_val, g1_val)
+          } else {
+            # Some variables are the same
+            sam_vals <- sapply(sam, function(s) g2[i, s])
+            sam_collapsed <- paste(sprintf("%s: %s", sam, sam_vals), collapse = ", ")
+            sprintf("%s\n%s: %s vs. %s", sam_collapsed, dif, g2_val, g1_val)
+          }
+        } else {
+          # Multiple variables differ
+          g1_vals <- sapply(valid_vars, function(var) g1[i, var])
+          g2_vals <- sapply(valid_vars, function(var) g2[i, var])
+
+          paste(
+            paste(g1_vals, collapse = ":"),
+            paste(g2_vals, collapse = ":"),
+            sep = " - "
+          )
+        }
+      },
+      USE.NAMES = FALSE
     )
 
 
@@ -491,9 +562,9 @@ autoplot.mic_solve <- function(object,
     ggplot2::ggplot(
       tbl,
       ggplot2::aes(x = .data[["label"]],
-                   y = log2(exp(Estimate)),
-                   ymin = log2(exp(CI_Lower)),
-                   ymax = log2(exp(CI_Upper)),
+                   y = Estimate,
+                   ymin = CI_Lower,
+                   ymax = CI_Upper,
                    !!!aes_extra)
     ) +
       ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
@@ -504,8 +575,8 @@ autoplot.mic_solve <- function(object,
       ggplot2::coord_flip() +
       ggplot2::theme_minimal() +
       ggplot2::labs(x = NULL,
-                    y = "Difference-of-differences (log2 ratio)",
-                    title = "DoD on ratio scale") +
+                    y = "Difference-of-differences",
+                    title = "DoD of raw MIC") +
       ggplot2::theme(
         axis.text.y  = ggplot2::element_text(face = "bold"),
         legend.position = "none",

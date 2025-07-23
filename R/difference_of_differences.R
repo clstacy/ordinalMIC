@@ -11,7 +11,7 @@
     se_i  <- sqrt(drop(t(g_int) %*% vcov_mat %*% g_int))
     ci_i  <- l_int + c(-1, 1) * zcrit * se_i
     # add comparison label
-    comparison_df <- .dod_all_base(
+    comparison_df <- .dod_all_multiplicative(
                         mic_tbl = mic_df,
                         mic_col = "MIC"
                       )
@@ -45,7 +45,7 @@
    se_i  <- sqrt(drop(t(g_int) %*% vcov_mat %*% g_int))
    ci_i  <- d_int + c(-1, 1) * zcrit * se_i
    # add comparison label
-   comparison_df <- .dod_all_base(
+   comparison_df <- .dod_all_additive(
      mic_tbl = mic_df,
      mic_col = "MIC"
    )
