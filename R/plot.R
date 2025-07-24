@@ -18,6 +18,7 @@ utils::globalVariables(
 #' @param type     One of `"mic"`, `"delta"`, or `"ratio"`, `"DoD_delta"`, or `"DoD_ratio"`.
 #' @param color_by Optional column name used to color and dodge replicate
 #'   points. Default: first column in `newdata`.
+#' @param dot_size Size of the dots in the dotplot. Default: `0.5`.
 #' @param ...      Additional arguments passed to [ggplot2::ggplot()].
 #'
 #' @return A **ggplot** object.
@@ -46,6 +47,7 @@ autoplot.mic_solve <- function(object,
                                type = c("mic", "delta", "ratio",
                                         "DoD_delta", "DoD_ratio"),
                                x = NULL, color_by = NULL,# shape_by = NULL,
+                               dot_size=0.5,
                                ...) {
   type <- match.arg(type)
   stopifnot(inherits(object, "mic_solve"))
@@ -121,6 +123,12 @@ autoplot.mic_solve <- function(object,
     obs_tbl_observed[[object$conc_name]] <- ifelse(obs_tbl_observed[["censored"]] == "Observed",
                                         obs_tbl_observed[[object$conc_name]],
                                         -1)
+
+    # hide extra points:
+    obs_tbl_observed$visible  <- ifelse(obs_tbl_observed[[object$conc_name]] < 0, 0, 1)
+    obs_tbl_censored$visible  <- ifelse(obs_tbl_censored[[object$conc_name]] < 0, 0, 0.5)
+    bin_w <- max(obs_tbl[[object$conc_name]]) / 30
+
     ## ------------------------------------------------------------------ ##
     ## 2.  Plot Results
 
@@ -135,15 +143,17 @@ autoplot.mic_solve <- function(object,
                             data = obs_tbl_observed,
                             ggplot2::aes(x = obs_tbl_observed[[x]],
                                          y = obs_tbl_observed[[object$conc_name]],
+                                         # alpha = visible,
                                          color = obs_tbl_observed[[color_by]],
                                          fill = obs_tbl_observed[[color_by]],
                                          group = interaction(obs_tbl[[x]],
                                                              obs_tbl[[color_by]]),
                             ),inherit.aes = FALSE,
                             binaxis = "y",      # Stack dots along the y-axis
+                            # alpha = obs_tbl_observed$visible,
                             color = "black",
                             stackdir = "center", # Stack direction
-                            dotsize = 0.5,      # Size of the dots
+                            dotsize = dot_size,      # Size of the dots
                             binwidth = max(obs_tbl[object$conc_name]/30),
                             position = ggplot2::position_dodge(width = pd$width)
                           ) +
@@ -155,19 +165,22 @@ autoplot.mic_solve <- function(object,
                      color = obs_tbl_censored[[color_by]],
                      fill = obs_tbl_censored[[color_by]],
                      group = interaction(obs_tbl[[x]],
-                                         obs_tbl[[color_by]] )
+                                         obs_tbl[[color_by]])
         ), inherit.aes = FALSE,
         binaxis = "y",      # Stack dots along the y-axis
         color = "black",
         binpositions = "all",
-        alpha = 0.5,
+        alpha = 0.5,#obs_tbl_censored$visible,
         stackdir = "center", # Stack direction
-        dotsize = 0.5,      # Size of the dots
+        dotsize = dot_size,      # Size of the dots
         binwidth = max(obs_tbl[object$conc_name]/30),
         position = ggplot2::position_dodge(width = pd$width)
       ) +
+      scale_alpha(range = c(0, 1), guide = "none") +
       # ggplot2::scale_color_manual(values = levels(object$model$model[[color_by]])) +
       # ggplot2::scale_fill_manual(values = levels(object$model$model[[color_by]])) +
+      # coord_flip() +
+      # ggplot2::coord_cartesian(xlim = c(0, NA)) +  # applied while MIC is still on y
       ggplot2::coord_flip(ylim = c(0,#max(obs_tbl[object$conc_name])
                                    NA)
                           ) +
@@ -518,7 +531,11 @@ autoplot.mic_solve <- function(object,
 
     ## ---------------------------------------------------------------
     ## 3.  aesthetic options
-    aes_extra <- list(fill = "#3182BD", color = "#3182BD")
+    aes_extra <- list(
+      fill = tbl$label,
+      color = tbl$label
+      #fill = "#3182BD", color = "#3182BD"
+    )
 
     ## ---------------------------------------------------------------
     ## 4.  plot
@@ -556,7 +573,11 @@ autoplot.mic_solve <- function(object,
       stop("No pairwise difference of differences found. Check that the model has at least two factors.")
     }
 
-    aes_extra <- list(fill = "#3182BD", color = "#3182BD")
+    aes_extra <- list(
+      fill = tbl$label,
+      color = tbl$label
+      #fill = "#3182BD", color = "#3182BD"
+      )
 
     ####  plot
     ggplot2::ggplot(
