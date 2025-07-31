@@ -10,6 +10,7 @@
   type = c("mic", "delta", "ratio", "DoD_delta", "DoD_ratio"),
   x = NULL,
   color_by = NULL,
+  dot_size = 0.5,
   ...
 )
 }
@@ -22,6 +23,8 @@
 
 \item{color_by}{Optional column name used to color and dodge replicate
 points. Default: first column in \code{newdata}.}
+
+\item{dot_size}{Size of the dots in the dotplot. Default: \code{0.5}.}
 
 \item{...}{Additional arguments passed to \code{\link[ggplot2:ggplot]{ggplot2::ggplot()}}.}
 }

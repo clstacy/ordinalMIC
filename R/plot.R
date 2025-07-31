@@ -176,7 +176,7 @@ autoplot.mic_solve <- function(object,
         binwidth = max(obs_tbl[object$conc_name]/30),
         position = ggplot2::position_dodge(width = pd$width)
       ) +
-      scale_alpha(range = c(0, 1), guide = "none") +
+      ggplot2::scale_alpha(range = c(0, 1), guide = "none") +
       # ggplot2::scale_color_manual(values = levels(object$model$model[[color_by]])) +
       # ggplot2::scale_fill_manual(values = levels(object$model$model[[color_by]])) +
       # coord_flip() +
@@ -312,8 +312,8 @@ autoplot.mic_solve <- function(object,
       ggplot2::geom_errorbar(position = pd, width = 0.25) +
       ggplot2::geom_point(position = pd, size = 2) +
       ggplot2::coord_flip() +
-      ggplot2::facet_wrap(~ factor(facet, levels = rev(levels(facet))),
-                          scales = "free_y", dir = "v") +
+      ggplot2::facet_grid(rows=vars(factor(tbl$facet, levels = rev(levels(tbl$facet)))),
+                          scales = "free_y", space='free') +
       ggplot2::theme_minimal() +
       ggplot2::labs(x = NULL, y = "delta-MIC (absolute)",
                     color = color_by, fill = color_by,# shape = shape_by,
@@ -508,8 +508,8 @@ autoplot.mic_solve <- function(object,
       ggplot2::geom_errorbar(position = pd, width = 0.25) +
       ggplot2::geom_point(position = pd, size = 2) +
       ggplot2::coord_flip() +
-      ggplot2::facet_wrap(~ factor(facet, levels = rev(levels(facet))),
-                          scales = "free_y", dir = "v") +
+      ggplot2::facet_grid(rows=vars(factor(tbl$facet, levels = rev(levels(tbl$facet)))),
+                          scales = "free_y", space='free') +
       ggplot2::theme_minimal() +
       ggplot2::labs(x = "Contrast", y = "MIC ratio (log scale)",
                     fill = color_by, color = color_by,# shape = shape_by,
