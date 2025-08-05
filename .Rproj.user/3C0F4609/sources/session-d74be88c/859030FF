@@ -1,0 +1,26 @@
+{
+    "id": "859030FF",
+    "path": "~/Documents/GitHub/ordinalMIC/R/mic_solve.R",
+    "project_path": "R/mic_solve.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1753987448294.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "126,0",
+        "scrollLine": "65"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1753987416,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1753987416,
+    "read_only": false,
+    "read_only_alternatives": []
+}

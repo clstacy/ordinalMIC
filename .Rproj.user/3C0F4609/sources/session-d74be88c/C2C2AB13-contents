@@ -1,0 +1,17 @@
+TODO Jul 31
+
+MIC pkg code
+- fix plotting (explode obj 'vars' not found). See if pushing my fix will work
+- add scale effects to vcov. Small changes needed for this.
+
+MIC webpage
+- once ordinalMIC package is improved, try using it in the webpage (see if works)
+- get webpage working completely (pull private repo to get that project)
+
+MIC manuscript
+- update the figures
+- idk what else
+- clean up the code supplement
+- make figure 1 according to notes
+- see what fig 2/3/4 need for the manuscript.
+- Work hard to update methods section to be really great.
