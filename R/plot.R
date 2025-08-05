@@ -1,7 +1,7 @@
 utils::globalVariables(
   c("MIC", "CI_Lower", "CI_Upper", "Delta_MIC", "Ratio_MIC",
     "Group1", "Group2", "Estimate", "obs_mic","rep",
-    ".data","pretty_label","x_simplified", "vars")
+    ".data","pretty_label","x_simplified")
 )
 
 #' autoplot method for mic_solve objects

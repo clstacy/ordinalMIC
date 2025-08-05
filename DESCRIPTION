@@ -24,3 +24,4 @@ RoxygenNote: 7.3.2
 Authors@R: 
     person("Carson", "Stacy", , "clstacy.stat@gmail.com", role = c("aut", "cre"))
 Config/testthat/edition: 3
+URL: https://clstacy.github.io/ordinalMIC/
