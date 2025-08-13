@@ -23,7 +23,7 @@ dod_delta_results – difference‑of‑differences on the additive scale
 
     <a class="navbar-brand me-2" href="../index.html">ordinalMIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,7 +65,8 @@ dod_delta_results – difference‑of‑differences on the additive scale
 <span>  transform_fun <span class="op">=</span> <span class="va">log1p</span>,</span>
 <span>  inv_transform_fun <span class="op">=</span> <span class="va">expm1</span>,</span>
 <span>  alpha <span class="op">=</span> <span class="fl">0.05</span>,</span>
-<span>  compare_pairs <span class="op">=</span> <span class="st">"all"</span></span>
+<span>  compare_pairs <span class="op">=</span> <span class="st">"all"</span>,</span>
+<span>  pvalue_scale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lp"</span>, <span class="st">"logmic"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -102,6 +103,12 @@ dod_delta_results – difference‑of‑differences on the additive scale
 comparison, or <code>"share_any"</code> to exclude contrasts where the two groups
 share no covariate levels in <code>newdata</code>..</p></dd>
 
+
+<dt id="arg-pvalue-scale">pvalue_scale<a class="anchor" aria-label="anchor" href="#arg-pvalue-scale"></a></dt>
+<dd><p>Which pivot the main P_value uses for pairwise tests:
+"lp" (difference in lp = log1p(MIC), recommended for calibration) or
+"logmic" (current Wald on log(MIC) for ratios and MIC scale for deltas).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -120,11 +127,18 @@ share no covariate levels in <code>newdata</code>..</p></dd>
 <span class="r-in"><span><span class="op">}</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     Group1   Group2 Ratio_MIC SE_logRatio  CI_Lower  CI_Upper      P_value</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1  WT:None Mut:None 0.9977145   0.1778356 0.7040967 1.4137747 9.897342e-01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2  WT:None  WT:Salt 2.2014631   0.1499139 1.6409844 2.9533733 1.410804e-07</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3  WT:None Mut:Salt 1.0831448   0.1769435 0.7657235 1.5321494 6.517160e-01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4 Mut:None  WT:Salt 2.2065061   0.1516742 1.6390788 2.9703692 1.810301e-07</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5 Mut:None Mut:Salt 1.0856261   0.1785414 0.7650777 1.5404762 6.454045e-01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6  WT:Salt Mut:Salt 0.4920114   0.1505724 0.3662754 0.6609103 2.472518e-06</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2  WT:None  WT:Salt 2.2014631   0.1499139 1.6409844 2.9533733 3.220246e-08</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3  WT:None Mut:Salt 1.0831448   0.1769435 0.7657235 1.5321494 6.517634e-01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 Mut:None  WT:Salt 2.2065061   0.1516742 1.6390788 2.9703692 4.157323e-08</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5 Mut:None Mut:Salt 1.0856261   0.1785414 0.7650777 1.5404762 6.454120e-01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6  WT:Salt Mut:Salt 0.4920114   0.1505724 0.3662754 0.6609103 8.615838e-07</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     P_value_lp P_value_WaldMIC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 9.897342e-01    9.897342e-01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 3.220246e-08    1.410804e-07</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 6.517634e-01    6.517160e-01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 4.157323e-08    1.810301e-07</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5 6.454120e-01    6.454045e-01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6 8.615838e-07    2.472518e-06</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
