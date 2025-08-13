@@ -1,7 +1,7 @@
 Package: ordinalMIC
 Type: Package
 Title: Minimum Inhibitory Concentration Estimation from Ordinal Regression Models
-Version: 0.1.0
+Version: 0.1.1
 Description: Provides tools to estimate minimum inhibitory concentration (MIC)
     and conduct rigorous pairwise comparisons (delta, fold‑change, and
     difference of difference tests) from cumulative‑link models fitted with

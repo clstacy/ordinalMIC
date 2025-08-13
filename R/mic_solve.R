@@ -17,6 +17,9 @@
 #' @param compare_pairs  One of \code{"all"} (default) to retain every pairwise
 #'   comparison, or \code{"share_any"} to exclude contrasts where the two groups
 #'   share no covariate levels in \code{newdata}..
+#' @param pvalue_scale Which pivot the main P_value uses for pairwise tests:
+#'   "lp" (difference in lp = log1p(MIC), recommended for calibration) or
+#'   "logmic" (current Wald on log(MIC) for ratios and MIC scale for deltas).
 #' @return An object of class `"mic_solve"` containing the tables above plus
 #'   `mic_estimates`.
 #' @examples
@@ -30,8 +33,10 @@
 #' @export
 mic_solve <- function(clm_fit, newdata = NULL, conc_name,
                       transform_fun = log1p, inv_transform_fun = expm1,
-                      alpha = 0.05, compare_pairs = "all") {
+                      alpha = 0.05, compare_pairs = "all",
+                      pvalue_scale = c("lp", "logmic")) {
 
+  pvalue_scale <- match.arg(pvalue_scale)
   ## --------------------------------------------------------------- ##
   ## if user omitted newdata, build one from the model’s factor levels
   if (is.null(newdata)) {
@@ -95,8 +100,10 @@ mic_solve <- function(clm_fit, newdata = NULL, conc_name,
   }
 
   pw <- .pairwise_delta_ratio(res$mic, res$g_mic, log(res$mic),
-                              res$g_mic / res$mic, vcv, zcrit,
-                              newdata, keep = share)
+                              res$g_mic / res$mic,
+                              res$lp, res$g_lp, vcv, zcrit,
+                              newdata, keep = share,
+                              pvalue_scale)
 
   dod_ratio  <- .difference_of_differences_ratio(log(res$mic),
                                                  res$g_mic / res$mic,

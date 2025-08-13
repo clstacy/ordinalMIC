@@ -11,7 +11,8 @@ mic_solve(
   transform_fun = log1p,
   inv_transform_fun = expm1,
   alpha = 0.05,
-  compare_pairs = "all"
+  compare_pairs = "all",
+  pvalue_scale = c("lp", "logmic")
 )
 }
 \arguments{
@@ -30,6 +31,10 @@ mic_solve(
 \item{compare_pairs}{One of \code{"all"} (default) to retain every pairwise
 comparison, or \code{"share_any"} to exclude contrasts where the two groups
 share no covariate levels in \code{newdata}..}
+
+\item{pvalue_scale}{Which pivot the main P_value uses for pairwise tests:
+"lp" (difference in lp = log1p(MIC), recommended for calibration) or
+"logmic" (current Wald on log(MIC) for ratios and MIC scale for deltas).}
 }
 \value{
 An object of class \code{"mic_solve"} containing the tables above plus
