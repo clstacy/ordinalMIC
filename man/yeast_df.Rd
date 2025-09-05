@@ -11,6 +11,7 @@ A data frame with 132 rows and 4 variables:
 \item{conc}{Numeric concentration units}
 \item{strain}{Factor: \code{"WT"} or \code{"Mut"}}
 \item{treatment}{Factor: \code{"None"} or \code{"Salt"}}
+\item{rep}{Replicate id (integer)}
 }
 }
 \usage{

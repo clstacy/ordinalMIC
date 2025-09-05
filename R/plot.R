@@ -1,6 +1,7 @@
 utils::globalVariables(
   c("MIC", "CI_Lower", "CI_Upper", "Delta_MIC", "Ratio_MIC",
-    "Group1", "Group2", "Estimate", "obs_mic","rep",
+    "Group1", "Group2", "DDlog2MIC", "obs_mic","rep",
+    "censored","max_tested",".conc_raw__","grp_key","visible",
     ".data","pretty_label","x_simplified")
 )
 
@@ -54,476 +55,692 @@ autoplot.mic_solve <- function(object,
   pd <- ggplot2::position_dodge(width = 0.5)
 
   if (type == "mic") {
+    ## ---- inputs & aesthetics ----------------------------------------------
     tbl <- object$mic_estimates
     group_vars <- names(object$newdata)
+    if (is.null(x)) x <- group_vars[1]
+    if (is.null(color_by)) color_by <- group_vars[min(2, length(group_vars))]
 
-    if (is.null(x)) x <- names(object$newdata)[1]
+    # keep ordering consistent with original data
+    x_lvls <- if (x %in% names(object$data)) levels(object$data[[x]]) else unique(tbl[[x]])
+    if (is.null(x_lvls)) x_lvls <- unique(tbl[[x]])
+    col_lvls <- if (color_by %in% names(object$data)) levels(object$data[[color_by]]) else unique(tbl[[color_by]])
+    if (is.null(col_lvls)) col_lvls <- "(1)"
 
-    ## pick a color/shape column -------------------------------------------
-    if (is.null(color_by)) color_by <- names(object$newdata)[min(2, ncol(object$newdata))]
-    aes_extra <- list()
-    if (color_by %in% names(tbl))
-      aes_extra$color <- factor(tbl[[color_by]],
-                                levels = levels(object$data[[color_by]]))
-      aes_extra$fill <- #tbl[[color_by]]
-        factor(tbl[[color_by]],
-               levels = levels(object$data[[color_by]]))
-    # if (!is.null(shape_by) && shape_by %in% names(tbl))
-    #   aes_extra$shape <- tbl[[shape_by]]
+    # base centers per x group
+    x_index <- setNames(seq_along(x_lvls), x_lvls)
 
-    ## observed MIC per replicate -------------------------------------------
-    d      <- object$data                   # raw data used in clm()
-    conc_col <- if (identical(all.equal(object$transform_fun , identity), TRUE))
-      object$conc_name else object$trans_name
-    group_vars <- names(object$newdata)     # strain, treatment,
+    # color-slice dodge across the x group
+    dodge_w_colors <- 0.6
+    M <- length(col_lvls)
+    color_offsets <- setNames(
+      if (M == 1) 0 else ((seq_len(M) - (M + 1)/2) / max(1, (M/2))) * (dodge_w_colors/2),
+      col_lvls
+    )
+    color_band_w <- if (M == 1) dodge_w_colors else (dodge_w_colors / M)
 
-    ## ------------------------------------------------------------------ ##
-    ## 1.  guarantee a replicate column
+    # add continuous x pos for bars
+    tbl[[x]] <- factor(tbl[[x]], levels = x_lvls)
+    if (color_by %in% names(tbl)) tbl[[color_by]] <- factor(tbl[[color_by]], levels = col_lvls)
+    tbl$._bar_pos_ <- unname(x_index[as.character(tbl[[x]])]) +
+      if (color_by %in% names(tbl)) unname(color_offsets[as.character(tbl[[color_by]])]) else 0
 
-    # need a replicate id; if none supplied, treat each row as its own rep
-    rep_col <- "rep"
-    if (!rep_col %in% names(d)) {
-      grp <- interaction(d[c(group_vars,conc_col)])
-      d[[rep_col]] <- ave(d[[conc_col]], grp,
-                          FUN = seq_along)
+    ## ---- observed MIC per (group x replicate series) -----------------------
+    d <- as.data.frame(object$data)
+    score_col <- names(object$model$model)[1]
+
+    # original-scale concentration for plotting (avoid double inverse)
+    has_trans_col <- (!identical(object$transform_fun, identity)) &&
+      (object$trans_name %in% names(d))
+
+    if (identical(object$transform_fun, identity)) {
+      d$._conc_raw_ <- suppressWarnings(as.numeric(d[[object$conc_name]]))
+    } else if (has_trans_col) {
+      d$._conc_raw_ <- object$inv_transform_fun(
+        suppressWarnings(as.numeric(d[[object$trans_name]]))
+      )
+    } else {
+      # inline transform; no transformed column stored -> use raw as-is
+      d$._conc_raw_ <- suppressWarnings(as.numeric(d[[object$conc_name]]))
     }
 
-    ## ------------------------------------------------------------------ ##
-    ## 2.  observed MIC per replicate
-    d$grp_key <- interaction(d[c(group_vars,rep_col)], drop = TRUE)
+    # ensure a replicate column (series across conc)
+    rep_col <- if ("rep" %in% names(d)) "rep" else NULL
+    if (is.null(rep_col)) {
+      conc_col_used <- if (has_trans_col) object$trans_name else object$conc_name
+      within_gc <- interaction(d[c(group_vars, conc_col_used)], drop = TRUE)
+      # Correctly generate replicate numbers within each group
+      d$._rep_ <- ave(rep(1, nrow(d)), within_gc, FUN = seq_along)
+      rep_col <- "._rep_"
+    }
 
-    split_data <- split(d, d$grp_key)
+    # split series by (x, color_by, replicate)
+    split_keys <- unique(na.omit(c(x, if (color_by %in% names(d)) color_by, rep_col)))
+    d$._key_ <- interaction(d[split_keys], drop = TRUE)
+    chunks <- split(d, d$._key_, drop = TRUE)
 
-    score_var = as.character(attr(terms(formula(d)), "variables")[[2]])
+    # global baseline from the model frame (same scale as sc below)
+    global_base <- suppressWarnings(
+      min(as.numeric(as.character(object$model$model[[1]])), na.rm = TRUE)
+    )
 
-    selected_rows <- lapply(split_data, function(group_df) {
-      # Filter for minimum score
-      filtered_df <- group_df[group_df[,score_var] > min(group_df[,score_var]), ]
-      # Arrange by conc_var
-      arranged_df <- filtered_df[order(filtered_df[[conc_col]],decreasing = T), ]
-      # Select the first row
-      arranged_df[1, ]
+    .as_num <- function(v) {
+      out <- suppressWarnings(as.numeric(as.character(v)))
+      if (all(is.na(out))) as.numeric(v) else out
+    }
+
+    obs_rows <- lapply(chunks, function(gdf) {
+      x_val     <- as.character(gdf[[x]][1])
+      color_val <- if (color_by %in% names(gdf)) as.character(gdf[[color_by]][1]) else "(1)"
+
+      # order by raw concentration
+      conc <- suppressWarnings(as.numeric(gdf$._conc_raw_))
+      ord  <- order(conc)
+      conc <- conc[ord]
+      sc   <- .as_num(gdf[[score_col]][ord])
+
+      # collapse duplicate rows at the SAME concentration within this series:
+      # mark 'growth at conc' if ANY row at that conc has sc > 0 (global base)
+      grew_by_conc <- tapply(sc > global_base, conc, function(v) any(v, na.rm = TRUE))
+      cvals <- as.numeric(names(grew_by_conc))
+      grew  <- as.logical(grew_by_conc)
+      o2    <- order(cvals)
+      cvals <- cvals[o2]
+      grew  <- grew[o2]
+
+      n <- length(cvals)
+      if (n == 0L) {
+        return(data.frame(
+          x_val     = x_val,
+          color_val = color_val,
+          y_obs     = NA_real_,
+          y_cens    = NA_real_,
+          stringsAsFactors = FALSE
+        ))
+      }
+
+      if (any(grew)) {
+        last_g <- max(which(grew))
+        if (last_g < n) {
+          mic_val <- cvals[last_g + 1L]   # earliest conc AFTER last growth
+          y_obs   <- mic_val
+          y_cens  <- NA_real_
+        } else {
+          # growth persists to the highest tested concentration -> censored
+          y_obs  <- NA_real_
+          y_cens <- max(cvals, na.rm = TRUE)
+        }
+      } else {
+        # no growth anywhere -> MIC is the lowest tested concentration
+        y_obs  <- cvals[1L]
+        y_cens <- NA_real_
+      }
+
+      data.frame(
+        x_val     = x_val,
+        color_val = color_val,
+        y_obs     = y_obs,
+        y_cens    = y_cens,
+        stringsAsFactors = FALSE
+      )
     })
 
-    obs_tbl <- do.call(rbind, selected_rows)
 
-    obs_tbl[[object$conc_name]] <- object$inv_transform_fun(obs_tbl[[conc_col]])
+    obs_tbl <- do.call(rbind, obs_rows)
+    if (!nrow(obs_tbl)) {
+      # draw only bars if no points
+      bar_width <- color_band_w * 0.85
+      p <- ggplot2::ggplot() +
+        ggplot2::geom_col(
+          data = tbl,
+          mapping = ggplot2::aes(x = ._bar_pos_, y = MIC,
+                                 fill = if (color_by %in% names(tbl)) .data[[color_by]] else NULL,
+                                 color = if (color_by %in% names(tbl)) .data[[color_by]] else NULL),
+          width = bar_width, alpha = 0.5, color = NA
+        ) +
+        ggplot2::geom_errorbar(
+          data = tbl,
+          mapping = ggplot2::aes(x = ._bar_pos_, ymin = CI_Lower, ymax = CI_Upper,
+                                 color = if (color_by %in% names(tbl)) .data[[color_by]] else NULL),
+          width = bar_width * 0.25
+        ) +
+        ggplot2::coord_flip() +
+        ggplot2::scale_x_continuous(breaks = seq_along(x_lvls), labels = x_lvls,
+                                    expand = ggplot2::expansion(mult = c(0.05, 0.1))) +
+        ggplot2::theme_minimal() +
+        ggplot2::labs(x = "Group", y = "MIC", fill = color_by, color = color_by,
+                      title = "Modelled MIC* with observed MICs") +
+        ggplot2::theme(legend.position = "bottom")
+      return(p)
+    }
 
-    ## assign color of points based on whether they are observed
-    obs_tbl[["censored"]] <- ifelse(obs_tbl[[object$conc_name]] <
-                                      max(obs_tbl[[object$conc_name]]),
-                                  "Observed", "Not Observed")
+    obs_tbl$x_val     <- factor(obs_tbl$x_val, levels = x_lvls)
+    obs_tbl$color_val <- factor(obs_tbl$color_val, levels = col_lvls)
 
-    obs_tbl_censored <- obs_tbl
-    obs_tbl_censored[[object$conc_name]] <- ifelse(obs_tbl_censored[["censored"]] == "Not Observed",
-                                        obs_tbl_censored[[object$conc_name]],
-                                        -1)
+    ## ---- “dotplot-style” replicate offsets per (x,color,y) ------------------
+    slice_w <- color_band_w * 0.3#7
 
-    obs_tbl_observed <- obs_tbl
-    obs_tbl_observed[[object$conc_name]] <- ifelse(obs_tbl_observed[["censored"]] == "Observed",
-                                        obs_tbl_observed[[object$conc_name]],
-                                        -1)
+    # precompute base centers
+    obs_tbl$x_center  <- unname(x_index[as.character(obs_tbl$x_val)])
+    obs_tbl$color_off <- unname(color_offsets[as.character(obs_tbl$color_val)])
 
-    # hide extra points:
-    obs_tbl_observed$visible  <- ifelse(obs_tbl_observed[[object$conc_name]] < 0, 0, 1)
-    obs_tbl_censored$visible  <- ifelse(obs_tbl_censored[[object$conc_name]] < 0, 0, 0.5)
-    bin_w <- max(obs_tbl[[object$conc_name]]) / 30
+    # combine observed/censored into one table with y + cens flag
+    # make_pts <- function(df, ycol, cens_flag) {
+    #   if (!nrow(df)) {
+    #     return(data.frame(
+    #       x_val=character(0), color_val=character(0),
+    #       y=numeric(0), cens=logical(0),
+    #       stringsAsFactors = FALSE
+    #     ))
+    #   }
+    #   data.frame(
+    #     x_val=df$x_val, color_val=df$color_val,
+    #     y=df[[ycol]], cens=rep(cens_flag, nrow(df)),
+    #     stringsAsFactors = FALSE
+    #   )
+    # }
+#
+#     obs_ok  <- subset(obs_tbl, is.finite(y_obs))
+#     cens_ok <- subset(obs_tbl, is.finite(y_cens))
+#
+#     pts_all <- rbind(
+#       make_pts(obs_ok,  "y_obs",  FALSE),
+#       make_pts(cens_ok, "y_cens", TRUE)
+#     )
+#
+#     pts_all$gkey <- interaction(pts_all$x_val, pts_all$color_val, pts_all$y, drop = TRUE)
 
-    ## ------------------------------------------------------------------ ##
-    ## 2.  Plot Results
+    # --- safe builders for observed/censored point tables ---
+    make_pts <- function(df, ycol, cens_flag) {
+      if (!nrow(df)) {
+        return(data.frame(
+          x_val=character(0), color_val=character(0),
+          y=numeric(0), cens=logical(0),
+          stringsAsFactors = FALSE
+        ))
+      }
+      data.frame(
+        x_val=df$x_val, color_val=df$color_val,
+        y=df[[ycol]], cens=rep(cens_flag, nrow(df)),
+        stringsAsFactors = FALSE
+      )
+    }
 
-    ggplot2::ggplot(tbl,
-                    ggplot2::aes(x = .data[[x]],
-                                 y = MIC, ymin = CI_Lower, ymax = CI_Upper,
-                                 !!!aes_extra)) +
-      ggplot2::geom_col(position = pd, width = 0.5, alpha=0.5, color = NA) +
-      # ggplot2::geom_pointrange(position = pd, size = 0.25, alpha=1) +
-      ggplot2::geom_errorbar(position = pd, width = 0.25) +
-      ggplot2::geom_dotplot(
-                            data = obs_tbl_observed,
-                            ggplot2::aes(x = obs_tbl_observed[[x]],
-                                         y = obs_tbl_observed[[object$conc_name]],
-                                         # alpha = visible,
-                                         color = obs_tbl_observed[[color_by]],
-                                         fill = obs_tbl_observed[[color_by]],
-                                         group = interaction(obs_tbl[[x]],
-                                                             obs_tbl[[color_by]]),
-                            ),inherit.aes = FALSE,
-                            binaxis = "y",      # Stack dots along the y-axis
-                            # alpha = obs_tbl_observed$visible,
-                            color = "black",
-                            stackdir = "center", # Stack direction
-                            dotsize = dot_size,      # Size of the dots
-                            binwidth = max(obs_tbl[object$conc_name]/30),
-                            position = ggplot2::position_dodge(width = pd$width)
-                          ) +
-      # for just the censored points
-      ggplot2::geom_dotplot(
-        data = obs_tbl_censored,
-        ggplot2::aes(x = obs_tbl_censored[[x]],
-                     y = obs_tbl_censored[[object$conc_name]],
-                     color = obs_tbl_censored[[color_by]],
-                     fill = obs_tbl_censored[[color_by]],
-                     group = interaction(obs_tbl[[x]],
-                                         obs_tbl[[color_by]])
-        ), inherit.aes = FALSE,
-        binaxis = "y",      # Stack dots along the y-axis
-        color = "black",
-        binpositions = "all",
-        alpha = 0.5,#obs_tbl_censored$visible,
-        stackdir = "center", # Stack direction
-        dotsize = dot_size,      # Size of the dots
-        binwidth = max(obs_tbl[object$conc_name]/30),
-        position = ggplot2::position_dodge(width = pd$width)
+    obs_ok  <- subset(obs_tbl, is.finite(y_obs))
+    cens_ok <- subset(obs_tbl, is.finite(y_cens))
+
+    pts_all <- rbind(
+      make_pts(obs_ok,  "y_obs",  FALSE),
+      make_pts(cens_ok, "y_cens", TRUE)
+    )
+
+    # if no points, bail out to bars-only plot (same as your earlier early-return)
+    if (!nrow(pts_all)) {
+      bar_width <- color_band_w * 0.85
+      p <- ggplot2::ggplot() +
+        ggplot2::geom_col(
+          data = tbl,
+          mapping = ggplot2::aes(x = ._bar_pos_, y = MIC,
+                                 fill  = if (color_by %in% names(tbl)) .data[[color_by]] else NULL,
+                                 color = if (color_by %in% names(tbl)) .data[[color_by]] else NULL),
+          width = bar_width, alpha = 0.5, color = NA
+        ) +
+        ggplot2::geom_errorbar(
+          data = tbl,
+          mapping = ggplot2::aes(x = ._bar_pos_, ymin = CI_Lower, ymax = CI_Upper,
+                                 color = if (color_by %in% names(tbl)) .data[[color_by]] else NULL),
+          width = bar_width * 0.25
+        ) +
+        ggplot2::coord_flip() +
+        ggplot2::scale_x_continuous(breaks = seq_along(x_lvls), labels = x_lvls,
+                                    expand = ggplot2::expansion(mult = c(0.05, 0.1))) +
+        ggplot2::theme_minimal() +
+        ggplot2::labs(x = "Group", y = "MIC", fill = color_by, color = color_by,
+                      title = "Modelled MIC* with observed MICs") +
+        ggplot2::theme(legend.position = "bottom")
+      return(p)
+    }
+
+    # --- reattach position columns for dot placement ---
+    # (use the same lookups you used to build obs_tbl)
+    pts_all$x_val    <- factor(pts_all$x_val, levels = x_lvls)
+    pts_all$color_val<- factor(pts_all$color_val, levels = col_lvls)
+
+    pts_all$x_center  <- unname(x_index[as.character(pts_all$x_val)])
+    pts_all$color_off <- if (length(color_offsets)) {
+      co <- color_offsets[as.character(pts_all$color_val)]
+      unname(ifelse(is.na(co), 0, co))
+    } else 0
+
+    # cluster key for dotplot-like offsetting
+    pts_all$gkey <- interaction(pts_all$x_val, pts_all$color_val, pts_all$y, drop = TRUE)
+
+    # helpers to generate dotplot-like offsets (unchanged)
+    make_offsets <- function(L, width, prefer_center) {
+      if (L == 1) return(0)
+      if (prefer_center && (L %% 2 == 1)) {
+        k <- (L - 1L) / 2L
+        raw <- c(-seq_len(k), 0, seq_len(k))
+        return((raw / max(abs(raw))) * (slice_w / 2))
+      } else {
+        steps <- seq(0.5, by = 1, length.out = ceiling(L / 2))
+        raw   <- sort(c(-steps, steps))[seq_len(L)]
+        return((raw / max(abs(raw))) * (slice_w / 2))
+      }
+    }
+
+    pts_all$rep_offset <- NA_real_
+    cluster_index <- split(seq_len(nrow(pts_all)), pts_all$gkey)
+
+    for (idx in cluster_index) {
+      L <- length(idx)
+      has_obs_idx <- which(!pts_all$cens[idx])
+      prefer_center <- length(has_obs_idx) > 0
+      offs <- make_offsets(L, slice_w, prefer_center)
+
+      if (L == 1) {
+        pts_all$rep_offset[idx] <- offs
+        next
+      }
+
+      if (prefer_center && (L %% 2 == 1)) {
+        zero_pos <- which.min(abs(offs))
+        center_i <- idx[has_obs_idx[1]]
+        pts_all$rep_offset[center_i] <- offs[zero_pos]
+
+        remaining <- setdiff(idx, center_i)
+        rem_offs  <- offs[-zero_pos]
+        rem_obs   <- setdiff(idx[has_obs_idx], center_i)
+        rem_cens  <- setdiff(remaining, rem_obs)
+        order_off <- order(abs(rem_offs), rem_offs)
+        ordered_members <- c(rem_obs, rem_cens)
+        pts_all$rep_offset[ordered_members] <- rem_offs[order_off][seq_along(ordered_members)]
+      } else {
+        order_off <- order(abs(offs), offs)
+        if (length(has_obs_idx)) {
+          obs_members  <- idx[has_obs_idx]
+          cens_members <- setdiff(idx, obs_members)
+          k <- min(length(obs_members), length(order_off))
+          pts_all$rep_offset[obs_members]    <- offs[order_off][seq_len(k)]
+          if (length(cens_members)) {
+            pts_all$rep_offset[cens_members] <- offs[order_off][-seq_len(k)]
+          }
+        } else {
+          pts_all$rep_offset[idx] <- offs[order_off]
+        }
+      }
+    }
+
+    pts_all$x_pos <- pts_all$x_center + pts_all$color_off + pts_all$rep_offset
+
+
+    # helpers to generate dotplot-like offsets
+    make_offsets <- function(L, width, prefer_center) {
+      if (L == 1) return(0)
+      if (prefer_center && (L %% 2 == 1)) {
+        # odd size WITH a preferred center -> include 0
+        k <- (L - 1L) / 2L
+        raw <- c(-seq_len(k), 0, seq_len(k))
+        return((raw / max(abs(raw))) * (width / 2))
+      } else {
+        # even OR no preferred center -> no 0, symmetric ±0.5, ±1.5, ...
+        steps <- seq(0.5, by = 1, length.out = ceiling(L / 2))
+        raw   <- sort(c(-steps, steps))[seq_len(L)]
+        return((raw / max(abs(raw))) * (width / 2))
+      }
+    }
+
+
+    pts_all$rep_offset <- NA_real_
+    cluster_index <- split(seq_len(nrow(pts_all)), pts_all$gkey)
+
+    for (idx in cluster_index) {
+      L <- length(idx)
+      has_obs_idx <- which(!pts_all$cens[idx])  # positions within 'idx' that are observed
+      prefer_center <- length(has_obs_idx) > 0  # only “prefer center” when any observed
+
+      offs <- make_offsets(L, slice_w, prefer_center)
+
+      if (L == 1) {
+        pts_all$rep_offset[idx] <- offs
+        next
+      }
+
+      if (prefer_center && (L %% 2 == 1)) {
+        # odd & with observed -> put ONE observed on 0, others by |offset|
+        zero_pos <- which.min(abs(offs))              # the center position (0)
+        # pick one observed to be the center
+        center_i <- idx[has_obs_idx[1]]
+        pts_all$rep_offset[center_i] <- offs[zero_pos]
+
+        # remaining members -> assign offsets by increasing |offset| (skipping center)
+        remaining <- setdiff(idx, center_i)
+        rem_offs  <- offs[-zero_pos]
+        # give observed the smallest |offset|s first, then censored
+        rem_obs   <- setdiff(idx[has_obs_idx], center_i)
+        rem_cens  <- setdiff(remaining, rem_obs)
+        order_off <- order(abs(rem_offs), rem_offs)   # nearest to center first
+        ordered_members <- c(rem_obs, rem_cens)
+        pts_all$rep_offset[ordered_members] <- rem_offs[order_off][seq_along(ordered_members)]
+      } else {
+        # even cluster OR all-censored: no dot at 0; assign nearest-to-center slots
+        # give observed the closest pair (±0.5), then fill outward
+        order_off <- order(abs(offs), offs)
+        if (length(has_obs_idx)) {
+          obs_members  <- idx[has_obs_idx]
+          cens_members <- setdiff(idx, obs_members)
+
+          k <- length(obs_members)
+          # cap in case more observed than available offsets (shouldn’t happen often)
+          k <- min(k, length(order_off))
+
+          pts_all$rep_offset[obs_members]  <- offs[order_off][seq_len(k)]
+          if (length(cens_members)) {
+            pts_all$rep_offset[cens_members] <- offs[order_off][-seq_len(k)]
+          }
+        } else {
+          # all censored: just fill by closeness to center
+          pts_all$rep_offset[idx] <- offs[order_off]
+        }
+      }
+    }
+
+
+    pts_all$x_pos <- pts_all$x_center + pts_all$color_off + pts_all$rep_offset
+
+
+    ## ---- draw plot ----------------------------------------------------------
+    bar_width <- color_band_w * 0.85
+    p <- ggplot2::ggplot() +
+      ggplot2::geom_col(
+        data = tbl,
+        mapping = ggplot2::aes(x = ._bar_pos_, y = MIC,
+                               fill = if (color_by %in% names(tbl)) .data[[color_by]] else NULL,
+                               color = if (color_by %in% names(tbl)) .data[[color_by]] else NULL),
+        width = bar_width, alpha = 0.5, color = NA
       ) +
-      ggplot2::scale_alpha(range = c(0, 1), guide = "none") +
-      # ggplot2::scale_color_manual(values = levels(object$model$model[[color_by]])) +
-      # ggplot2::scale_fill_manual(values = levels(object$model$model[[color_by]])) +
-      # coord_flip() +
-      # ggplot2::coord_cartesian(xlim = c(0, NA)) +  # applied while MIC is still on y
-      ggplot2::coord_flip(ylim = c(0,#max(obs_tbl[object$conc_name])
-                                   NA)
-                          ) +
+      ggplot2::geom_errorbar(
+        data = tbl,
+        mapping = ggplot2::aes(x = ._bar_pos_, ymin = CI_Lower, ymax = CI_Upper,
+                               color = if (color_by %in% names(tbl)) .data[[color_by]] else NULL),
+        width = bar_width * 0.25
+      )
+
+    p <- p +
+      ggplot2::geom_point(
+        data = pts_all,
+        mapping = ggplot2::aes(
+          x = x_pos, y = y,
+          fill  = if (color_by %in% names(tbl)) color_val else NULL,
+          color = if (color_by %in% names(tbl)) color_val else NULL,
+          alpha = ifelse(cens, 0.4, 1)
+        ),
+        size = 2, show.legend = TRUE
+      ) +
+      ggplot2::scale_alpha_identity() +
+      ggplot2::coord_flip() +
+      ggplot2::scale_x_continuous(breaks = seq_along(x_lvls), labels = x_lvls,
+                                  expand = ggplot2::expansion(mult = c(0.05, 0.1))) +
       ggplot2::theme_minimal() +
-      ggplot2::labs(x = "Group", y = "MIC",
-                    color = color_by, fill = color_by, #shape = shape_by,
-                    title = "Modelled MIC* with observed MICs") +
+      ggplot2::labs(
+        x = "Group", y = "MIC",
+        fill = color_by, color = color_by,
+        title = "Modelled MIC* with observed MICs"
+      ) +
       ggplot2::theme(legend.position = "bottom")
+
+    return(p)
 
   } else if (type == "delta") {
 
     ## ----- prettier deltaMIC forest plot  ------------------------------------
     tbl <- object$delta_mic_results
 
-    ## --------------------------------------------------------------- ##
-    ## 1.  explode Group1 / Group2 into factor columns
-    vars <- names(object$newdata)              # e.g. "strain", "treatment"
-
-    if (is.null(color_by)) color_by <- names(object$newdata)[min(2, ncol(object$newdata))]
+    ## 1) explode Group1 / Group2 into factor columns
+    fvars <- names(object$newdata)              # e.g. "strain", "treatment"
+    if (is.null(color_by)) color_by <- fvars[min(2, length(fvars))]
 
     explode_delta <- function(col) {
-      mat <- do.call(rbind,
-                     strsplit(as.character(tbl[[col]]), ":", fixed = TRUE))
+      mat <- do.call(rbind, strsplit(as.character(tbl[[col]]), ":", fixed = TRUE))
       out <- as.data.frame(mat, stringsAsFactors = FALSE)
-      names(out) <- vars
+      names(out) <- fvars
       out
     }
 
     left  <- explode_delta("Group1")
     right <- explode_delta("Group2")
-    names(left)  <- paste0(vars, "_1")
-    names(right) <- paste0(vars, "_2")
+    names(left)  <- paste0(fvars, "_1")
+    names(right) <- paste0(fvars, "_2")
     tbl <- cbind(tbl, left, right)
 
-    for ( i in seq_along(vars) ) {
-      tbl[[vars[i]]] <- ifelse(tbl[[paste0(vars[i], "_1")]]==
-                               tbl[[paste0(vars[i], "_2")]],
-                               tbl[[paste0(vars[i], "_1")]],
-                               paste0(tbl[[paste0(vars[i], "_2")]],
-                                      " - ",
-                                      tbl[[paste0(vars[i], "_1")]]
-                                      )
+    for (i in seq_along(fvars)) {
+      tbl[[fvars[i]]] <- ifelse(
+        tbl[[paste0(fvars[i], "_1")]] == tbl[[paste0(fvars[i], "_2")]],
+        tbl[[paste0(fvars[i], "_1")]],
+        paste0(tbl[[paste0(fvars[i], "_2")]], " - ", tbl[[paste0(fvars[i], "_1")]])
       )
     }
 
     explode <- function(x) {
-      m <- do.call(rbind, strsplit(as.character(x),  ":", fixed = TRUE))
+      m <- do.call(rbind, strsplit(as.character(x), ":", fixed = TRUE))
       out <- as.data.frame(m, stringsAsFactors = FALSE)
-      names(out) <- vars
+      names(out) <- fvars
       out
     }
 
     g1 <- explode(tbl$Group1)
     g2 <- explode(tbl$Group2)
 
-    ## 2. which variables match between the two groups? -----------------------
-    same <- g1 == g2                           # nrow x n_vars logical
-
+    ## 2) facet label (put in data!)
+    same <- g1 == g2
     tbl$facet <- apply(same, 1, function(r) {
-      if (all(r))           "all"                       # every variable matches
-      else if (!any(r))     paste0("Effect of other")   # none match
-      else                  paste0("Effect of ",paste(vars[!r], collapse = "+"))  # e.g. "strain" or "strain+treatment"
+      if (all(r))           "all"
+      else if (!any(r))     "Effect of other"
+      else                  paste0("Effect of ", paste(fvars[!r], collapse = "+"))
     })
+    # order: (optional) make "Effect of other" appear first or last as you like
+    tbl$facet <- stats::relevel(as.factor(tbl$facet), ref = "Effect of other")
+    # reverse levels for strip order (optional)
+    tbl$facet <- factor(tbl$facet, levels = rev(levels(tbl$facet)))
 
-    tbl$facet <- relevel(as.factor(tbl$facet), "Effect of other")  # put "all" first
-
-
-
-
+    ## 3) simplified x labels
     tbl$x_simplified <- vapply(
       seq_len(nrow(tbl)),
       FUN.VALUE = character(1),
       function(i) {
-        dif <- vars[g1[i, ] != g2[i, ]]
-        sam <- vars[g1[i, ] == g2[i, ]]
-        if (length(sam) == 0) sam <- NA  # if g2 and g1 are empty
-        if (length(dif) == 0) {                 # all covariates same
+        dif <- fvars[g1[i, ] != g2[i, ]]
+        sam <- fvars[g1[i, ] == g2[i, ]]
+        if (length(sam) == 0) sam <- NA
+        if (length(dif) == 0) {
           "no-diff"
-        } else if (length(dif) == 1) {          # exactly one differs
+        } else if (length(dif) == 1) {
           if (is.na(sam)) {
-            # if g2 and g1 are empty
-            sprintf("%s: %s - %s",
-                    dif,
-                    g2[i, dif],
-                    g1[i, dif])                   # baseline (Group1)
-            } else {
-            # if g2 and g1 are not empty
+            sprintf("%s: %s - %s", dif, g2[i, dif], g1[i, dif])
+          } else {
             sprintf("%s: %s\n%s: %s - %s",
-                    sam,
-                    g2[i, sam],                   # "new" level (Group2)
-                    dif,
-                    g2[i, dif],                   # Group2 level first
-                    g1[i, dif])                   # baseline (Group1)
-
-            }
-        } else {                                # >1 covariate differ
-          paste(
-                paste(g1[i, vars], collapse = ":"),#"",
-                paste(g2[i, vars], collapse = ":"),
-          sep = " - ")
+                    sam, g2[i, sam],
+                    dif, g2[i, dif], g1[i, dif])
+          }
+        } else {
+          paste(paste(g1[i, fvars], collapse = ":"),
+                paste(g2[i, fvars], collapse = ":"), sep = " - ")
         }
       }
     )
 
-
-
-    ## 3. choose aesthetics ---------------------------------------------------
-    if (is.null(color_by)) color_by <- names(object$newdata)[min(2, ncol(object$newdata))]
-    aes_extra <- list()
-    if (color_by %in% names(g1)) {             # use left-hand group's value
-      #tbl[[color_by]] <- g1[[color_by]]
-      aes_extra$color <- tbl[[color_by]]
-      aes_extra$fill   <- tbl[[color_by]]
-    }
-
     pd <- ggplot2::position_dodge(width = 0.6)
 
-    ggplot2::ggplot(
+    p <- ggplot2::ggplot(
       tbl,
-      ggplot2::aes(x = x_simplified,#interaction(Group2, Group1, sep = " - "),
-                   y = Delta_MIC,
-                   ymin = CI_Lower, ymax = CI_Upper,
-                   !!!aes_extra)
-    ) +
-      ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
-                          color = "grey60") +
-      ggplot2::geom_col(position = pd, width = 0.5,
-                        alpha = 0.35, color = NA) +
+      ggplot2::aes(
+        x = x_simplified,
+        y = Delta_MIC,
+        ymin = CI_Lower, ymax = CI_Upper
+      )
+    )
+
+    # map color/fill via .data pronoun so it evaluates inside each layer's data
+    if (!is.null(color_by) && color_by %in% names(tbl)) {
+      p <- p + ggplot2::aes(color = .data[[color_by]], fill = .data[[color_by]])
+    }
+
+    p <- p +
+      ggplot2::geom_hline(yintercept = 0, linetype = "dashed", color = "grey60") +
+      ggplot2::geom_col(position = pd, width = 0.5, alpha = 0.35, color = NA) +
       ggplot2::geom_errorbar(position = pd, width = 0.25) +
       ggplot2::geom_point(position = pd, size = 2) +
       ggplot2::coord_flip() +
-      ggplot2::facet_grid(rows=vars(factor(tbl$facet, levels = rev(levels(tbl$facet)))),
-                          scales = "free_y", space='free') +
+      ggplot2::facet_grid(rows = ggplot2::vars(facet), scales = "free_y", space = "free") +
       ggplot2::theme_minimal() +
-      ggplot2::labs(x = NULL, y = "delta-MIC (absolute)",
-                    color = color_by, fill = color_by,# shape = shape_by,
-                    title = "Pairwise MIC differences (delta-MIC)") +
+      ggplot2::labs(
+        x = NULL, y = "delta-MIC (absolute)",
+        color = color_by, fill = color_by,
+        title = "Pairwise MIC differences (delta-MIC)"
+      ) +
       ggplot2::theme(
         strip.text.y = ggplot2::element_text(face = "bold"),
-        legend.position = if (is.null(color_by)) #&& is.null(shape_by))
-          "none" else "bottom"
+        legend.position = if (is.null(color_by)) "none" else "bottom"
       )
 
+    return(p)
 
-  } else if (type == "ratio") {                           # ratio plot
+
+
+  } else if (type == "ratio") {
+
     tbl <- object$ratio_mic_results
-
     if (is.null(tbl)) {
       stop("No pairwise MIC ratios found. Check that the model has at least two levels for each factor.")
     }
 
-    ## --------------------------------------------------------------- ##
-    ## 1.  explode Group1 / Group2 into factor columns
-    vars <- names(object$newdata)              # e.g. "strain", "treatment"
-    if (is.null(color_by)) color_by <- names(object$newdata)[min(2, ncol(object$newdata))]
+    fvars <- names(object$newdata)
+    if (is.null(color_by)) color_by <- fvars[min(2, length(fvars))]
+
     explode_mic <- function(col) {
-      mat <- do.call(rbind,
-                     strsplit(as.character(tbl[[col]]), ":", fixed = TRUE))
+      mat <- do.call(rbind, strsplit(as.character(tbl[[col]]), ":", fixed = TRUE))
       out <- as.data.frame(mat, stringsAsFactors = FALSE)
-      names(out) <- vars
+      names(out) <- fvars
       out
     }
 
     left  <- explode_mic("Group1")
     right <- explode_mic("Group2")
-    names(left)  <- paste0(vars, "_1")
-    names(right) <- paste0(vars, "_2")
+    names(left)  <- paste0(fvars, "_1")
+    names(right) <- paste0(fvars, "_2")
     tbl <- cbind(tbl, left, right)
 
-    for ( i in seq_along(vars) ) {
-      tbl[[vars[i]]] <- ifelse(tbl[[paste0(vars[i], "_1")]]==
-                                 tbl[[paste0(vars[i], "_2")]],
-                               tbl[[paste0(vars[i], "_1")]],
-                               paste0(tbl[[paste0(vars[i], "_2")]],
-                                      " - ",
-                                      tbl[[paste0(vars[i], "_1")]]
-                               )
+    for (i in seq_along(fvars)) {
+      tbl[[fvars[i]]] <- ifelse(
+        tbl[[paste0(fvars[i], "_1")]] == tbl[[paste0(fvars[i], "_2")]],
+        tbl[[paste0(fvars[i], "_1")]],
+        paste0(tbl[[paste0(fvars[i], "_2")]], " - ", tbl[[paste0(fvars[i], "_1")]])
       )
     }
 
     explode <- function(x) {
-      m <- do.call(rbind, strsplit(as.character(x),  ":", fixed = TRUE))
+      m <- do.call(rbind, strsplit(as.character(x), ":", fixed = TRUE))
       out <- as.data.frame(m, stringsAsFactors = FALSE)
-      names(out) <- vars
+      names(out) <- fvars
       out
     }
 
     g1 <- explode(tbl$Group1)
     g2 <- explode(tbl$Group2)
 
-    ## 2. which variables match between the two groups? -----------------------
-    same <- g1 == g2                           # nrow x n_vars logical
-
+    same <- g1 == g2
     tbl$facet <- apply(same, 1, function(r) {
-      if (all(r))           "all"                       # every variable matches
-      else if (!any(r))     paste0("Effect of other")   # none match
-      else                  paste0("Effect of ",paste(vars[!r], collapse = "+"))  # e.g. "strain" or "strain+treatment"
+      if (all(r))           "all"
+      else if (!any(r))     "Effect of other"
+      else                  paste0("Effect of ", paste(fvars[!r], collapse = "+"))
     })
+    tbl$facet <- stats::relevel(as.factor(tbl$facet), ref = "Effect of other")
+    tbl$facet <- factor(tbl$facet, levels = rev(levels(tbl$facet)))
 
-    tbl$facet <- relevel(as.factor(tbl$facet), "Effect of other")  # put "all" first
-
-    # tbl$x_simplified <- vapply(
-    #   seq_len(nrow(tbl)),
-    #   FUN.VALUE = character(1),
-    #   function(i) {
-    #     dif <- vars[g1[i, ] != g2[i, ]]
-    #     sam <- vars[g1[i, ] == g2[i, ]]
-    #     if (length(sam) == 0) sam <- NA  # if g2 and g1 are empty
-    #     if (length(dif) == 0) {                 # all covariates same
-    #       "no-diff"
-    #     } else if (length(dif) == 1) {          # exactly one differs
-    #       if (is.na(sam)) {
-    #         # if g2 and g1 are empty
-    #         sprintf("%s: %s - %s",
-    #                 dif,
-    #                 g2[i, dif],
-    #                 g1[i, dif])                   # baseline (Group1)
-    #       } else {
-    #         # if g2 and g1 are not empty
-    #         sprintf("%s: %s\n%s: %s - %s",
-    #                 sam,
-    #                 g2[i, sam],                   # "new" level (Group2)
-    #                 dif,
-    #                 g2[i, dif],                   # Group2 level first
-    #                 g1[i, dif])                   # baseline (Group1)
-    #       }
-    #     } else {                                # >1 covariate differ
-    #       paste(
-    #         paste(g1[i, vars], collapse = ":"),#"",
-    #         paste(g2[i, vars], collapse = ":"),
-    #         sep = " - ")
-    #     }
-    #   }
-    # )
-
-    # attempted fix for simplified x:
-
+    # simplified labels (your revised version is fine)
     tbl$x_simplified <- sapply(
       seq_len(nrow(tbl)),
       function(i) {
-        # Use the actual vars that correspond to your model factors
-        valid_vars <- vars[vars %in% names(g1) & vars %in% names(g2)]
+        valid_vars <- fvars[fvars %in% names(g1) & fvars %in% names(g2)]
+        if (length(valid_vars) == 0) return("no-vars")
 
-        if (length(valid_vars) == 0) {
-          return("no-vars")
-        }
-
-        # Find which variables differ and which are the same
-        dif <- character(0)
-        sam <- character(0)
-
+        dif <- character(0); sam <- character(0)
         for (var in valid_vars) {
-          g1_val <- g1[i, var]
-          g2_val <- g2[i, var]
-
-          # Skip if either value is NA or empty
-          if (is.na(g1_val) || is.na(g2_val) ||
-              length(g1_val) == 0 || length(g2_val) == 0) {
-            next
-          }
-
-          if (g1_val == g2_val) {
-            sam <- c(sam, var)
-          } else {
-            dif <- c(dif, var)
-          }
+          g1_val <- g1[i, var]; g2_val <- g2[i, var]
+          if (is.na(g1_val) || is.na(g2_val) || length(g1_val) == 0 || length(g2_val) == 0) next
+          if (g1_val == g2_val) sam <- c(sam, var) else dif <- c(dif, var)
         }
 
         if (length(dif) == 0) {
-          # All variables are the same
           "no-diff"
         } else if (length(dif) == 1) {
-          # Exactly one variable differs
-          g1_val <- g1[i, dif]
-          g2_val <- g2[i, dif]
-
+          g1_val <- g1[i, dif]; g2_val <- g2[i, dif]
           if (length(sam) == 0) {
-            # No variables are the same
             sprintf("%s: %s vs. %s", dif, g2_val, g1_val)
           } else {
-            # Some variables are the same
             sam_vals <- sapply(sam, function(s) g2[i, s])
             sam_collapsed <- paste(sprintf("%s: %s", sam, sam_vals), collapse = ", ")
             sprintf("%s\n%s: %s vs. %s", sam_collapsed, dif, g2_val, g1_val)
           }
         } else {
-          # Multiple variables differ
           g1_vals <- sapply(valid_vars, function(var) g1[i, var])
           g2_vals <- sapply(valid_vars, function(var) g2[i, var])
-
-          paste(
-            paste(g1_vals, collapse = ":"),
-            paste(g2_vals, collapse = ":"),
-            sep = " - "
-          )
+          paste(paste(g1_vals, collapse = ":"), paste(g2_vals, collapse = ":"), sep = " - ")
         }
       },
       USE.NAMES = FALSE
     )
 
-
-    if (is.null(color_by))
-      color_by <- names(object$newdata)[min(2, ncol(object$newdata))]
-    ## 3. choose aesthetics ---------------------------------------------------
-    aes_extra <- list()
-    if (color_by %in% names(g1)) {             # use left-hand group's value
-      #tbl[[color_by]] <- g1[[color_by]]
-      aes_extra$color <- tbl[[color_by]]
-      aes_extra$fill   <- tbl[[color_by]]
-    }
-
     pd <- ggplot2::position_dodge(width = 0.6)
 
-    ggplot2::ggplot(
+    p <- ggplot2::ggplot(
       tbl,
-      ggplot2::aes(x = x_simplified,#interaction(Group2, Group1, sep = " - "),
-                   y = log2(Ratio_MIC),
-                   ymin = log2(CI_Lower), ymax = log2(CI_Upper),
-                   !!!aes_extra)
-    ) +
-      ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
-                          color = "grey60") +
-      ggplot2::geom_col(position = pd, width = 0.5,
-                        alpha = 0.35, color = NA) +
+      ggplot2::aes(
+        x = x_simplified,
+        y = log2Ratio_MIC,
+        ymin = CI_Lower, ymax = CI_Upper
+      )
+    )
+    if (!is.null(color_by) && color_by %in% names(tbl)) {
+      p <- p + ggplot2::aes(color = .data[[color_by]], fill = .data[[color_by]])
+    }
+
+    p <- p +
+      ggplot2::geom_hline(yintercept = 0, linetype = "dashed", color = "grey60") +
+      ggplot2::geom_col(position = pd, width = 0.5, alpha = 0.35, color = NA) +
       ggplot2::geom_errorbar(position = pd, width = 0.25) +
       ggplot2::geom_point(position = pd, size = 2) +
       ggplot2::coord_flip() +
-      ggplot2::facet_grid(rows=vars(factor(tbl$facet, levels = rev(levels(tbl$facet)))),
-                          scales = "free_y", space='free') +
+      ggplot2::facet_grid(rows = ggplot2::vars(facet), scales = "free_y", space = "free") +
       ggplot2::theme_minimal() +
-      ggplot2::labs(x = "Contrast", y = "MIC ratio (log scale)",
-                    fill = color_by, color = color_by,# shape = shape_by,
-           title = "Pairwise log2 MIC*", ...)
+      ggplot2::labs(
+        x = "Contrast", y = "MIC ratio (log2 scale)",
+        color = color_by, fill = color_by,
+        title = "Pairwise log2 MIC* ratios"
+      ) +
+      ggplot2::theme(
+        strip.text.y = ggplot2::element_text(face = "bold"),
+        legend.position = if (is.null(color_by)) "none" else "bottom"
+      )
 
-
-
-
+    return(p)
 
 
   } else if (type == "DoD_ratio") {
     ## ------------------Function to get pairs--------------------------------
     tbl  <- object$dod_ratio_results          # usually one row
-    vars <- names(object$newdata)             # e.g. c("strain","treatment")
+    fvars <- names(object$newdata)             # e.g. c("strain","treatment")
+
+    if (!"label" %in% names(tbl) &&
+        all(c("var1","var2","var1_lvlA","var1_lvlB","var2_lvlC","var2_lvlD") %in% names(tbl))) {
+      tbl$label <- sprintf("%s: %s vs %s x %s: %s vs %s",
+                           tbl$var1, tbl$var1_lvlB, tbl$var1_lvlA,
+                           tbl$var2, tbl$var2_lvlD, tbl$var2_lvlC)
+    }
+
+    tbl <- subset(tbl, is.finite(DDlog2MIC) & is.finite(CI_Lower) & is.finite(CI_Upper) #&
+                    # DDlog2MIC > 0 & CI_Lower > 0 & CI_Upper > 0
+                  )
+    if (nrow(tbl) == 0L) stop("No finite DoD ratios to plot.")
 
     if (nrow(tbl) == 0L) {
       stop("No pairwise difference of difference ratios found. Check that the model has at least two factors.")
@@ -542,9 +759,9 @@ autoplot.mic_solve <- function(object,
     ggplot2::ggplot(
       tbl,
       ggplot2::aes(x = .data[["label"]],
-                   y = log2(Estimate),
-                   ymin = log2(CI_Lower),
-                   ymax = log2(CI_Upper),
+                   y = DDlog2MIC,
+                   ymin = CI_Lower,
+                   ymax = CI_Upper,
                    !!!aes_extra)
     ) +
       ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
@@ -567,7 +784,14 @@ autoplot.mic_solve <- function(object,
   } else if (type == "DoD_delta") {
 
     tbl  <- object$dod_delta_results          # usually one row
-    vars <- names(object$newdata)             # e.g. c("strain","treatment")
+    fvars <- names(object$newdata)             # e.g. c("strain","treatment")
+
+    if (!"label" %in% names(tbl) &&
+        all(c("var1","var2","var1_lvlA","var1_lvlB","var2_lvlC","var2_lvlD") %in% names(tbl))) {
+      tbl$label <- sprintf("%s: %s vs %s x %s: %s vs %s",
+                           tbl$var1, tbl$var1_lvlB, tbl$var1_lvlA,
+                           tbl$var2, tbl$var2_lvlD, tbl$var2_lvlC)
+    }
 
     if (is.null(tbl)) {
       stop("No pairwise difference of differences found. Check that the model has at least two factors.")
@@ -583,7 +807,7 @@ autoplot.mic_solve <- function(object,
     ggplot2::ggplot(
       tbl,
       ggplot2::aes(x = .data[["label"]],
-                   y = Estimate,
+                   y = DDMIC,
                    ymin = CI_Lower,
                    ymax = CI_Upper,
                    !!!aes_extra)

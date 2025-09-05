@@ -46,15 +46,15 @@ with(yeast_df, {
 # alpha <- ifelse(yeast_df$strain == "Mut", 3.0, 2.0)
 # linpred <- alpha - beta * yeast_df$conc
 
-cutpoints <- c(-1.5, -0.5, 0.5, 1.5)
-latent    <- linpred + stats::rlogis(nrow(yeast_df))
+cutpoints <- c(-3, -1, 1, 3)
+latent    <- linpred + 0.5*stats::rlogis(nrow(yeast_df))
 
 yeast_df$score <- ordered(
   findInterval(latent, c(-Inf, cutpoints, Inf)) - 1,
   levels = 0:4
 )
 
-yeast_df$rep <- NULL
+# yeast_df$rep <- NULL
 
 
 usethis::use_data(yeast_df, overwrite = TRUE)

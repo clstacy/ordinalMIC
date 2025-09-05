@@ -105,12 +105,20 @@ mic_solve <- function(clm_fit, newdata = NULL, conc_name,
                               newdata, keep = share,
                               pvalue_scale)
 
-  dod_ratio  <- .difference_of_differences_ratio(log(res$mic),
-                                                 res$g_mic / res$mic,
-                                                 vcv, zcrit, mic_df)
+  # dod_ratio  <- .difference_of_differences_ratio(log(res$mic),
+  #                                                res$g_mic / res$mic,
+  #                                                vcv, zcrit, mic_df)
+  #
+  # dod_delta  <- .difference_of_differences_additive(res$mic, res$g_mic,
+  #                                                   vcv, zcrit, mic_df)
+  dod_ratio <- .difference_of_differences_ratio_all(
+    log(res$mic), res$g_mic / res$mic, vcv, zcrit, mic_df
+  )
 
-  dod_delta  <- .difference_of_differences_additive(res$mic, res$g_mic,
-                                                    vcv, zcrit, mic_df)
+  dod_delta <- .difference_of_differences_additive_all(
+    res$mic, res$g_mic, vcv, zcrit, mic_df
+  )
+
 
   structure(
     list(

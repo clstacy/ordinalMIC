@@ -10,6 +10,7 @@
 #'   \item{conc}{Numeric concentration units}
 #'   \item{strain}{Factor: \code{"WT"} or \code{"Mut"}}
 #'   \item{treatment}{Factor: \code{"None"} or \code{"Salt"}}
+#'   \item{rep}{Replicate id (integer)}
 #' }
 #'
 #' @usage data(yeast_df)

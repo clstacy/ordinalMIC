@@ -18,7 +18,10 @@
 
   d_mic_d_lp <- if (identical(inv_fun, expm1)) (mic + 1) else exp(lp)
   g_mic      <- g_lp * d_mic_d_lp
-  se_lp      <- sqrt(pmax(0, rowSums((g_lp %*% vcov_mat) * g_lp)))
+  # se_lp      <- sqrt(pmax(0, rowSums((g_lp %*% vcov_mat) * g_lp)))
+  g_lpA <- .align_grad_mat_to_vcov(g_lp, vcov_mat)         # n×k, name-aligned
+  se_lp <- sqrt(pmax(0, rowSums((g_lpA %*% vcov_mat) * g_lpA)))
+
 
   list(lp = lp, mic = mic, g_lp = g_lp, g_mic = g_mic, se_lp = se_lp)
 }

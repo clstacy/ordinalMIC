@@ -28,36 +28,45 @@
 
     ## ---------- lp-based pivot shared by both delta and ratio ----------
     dlp    <- lp[j] - lp[i]                       # lp = log1p(MIC)
-    g_dlp  <- g_lp[j, ] - g_lp[i, ]
-    se_dlp <- sqrt(drop(t(g_dlp) %*% vcov_mat %*% g_dlp))
+    g_dlp  <- g_lp[j, , drop = FALSE] - g_lp[i, , drop = FALSE]   # 1xp, keeps colnames
+    # se_dlp <- sqrt(drop(t(g_dlp) %*% vcov_mat %*% g_dlp))
+    se_dlp <- .quadform_se(g_dlp, vcov_mat)
     p_lp   <- 2 * stats::pnorm(-abs(dlp / se_dlp))
 
     ## Δ‑MIC
     d       <- mic[j] - mic[i]
-    g_d     <- g_mic[j, ] - g_mic[i, ]
-    se_d    <- sqrt(drop(t(g_d) %*% vcov_mat %*% g_d))
+    g_d     <- g_mic[j, , drop = FALSE] - g_mic[i, , drop = FALSE]
+    # se_d    <- sqrt(drop(t(g_d) %*% vcov_mat %*% g_d))
+    se_d   <- .quadform_se(g_d,   vcov_mat)
     ci_d    <- d + c(-1, 1) * zcrit * se_d
     p_d     <- 2 * stats::pnorm(-abs(d / se_d))
     out_delta[[k]] <- data.frame(Group1 = g1, Group2 = g2, Delta_MIC = d,
-                                 SE = se_d, CI_Lower = ci_d[1],
-                                 CI_Upper = ci_d[2],
-                                 P_value   = if (pvalue_scale == "lp") p_lp else p_d,
-                                 P_value_lp        = p_lp,        # for QA
-                                 P_value_WaldMIC   = p_d)
+                                 SE = se_d,
+                                 CI_Lower = ci_d[1], CI_Upper = ci_d[2],
+                                 P_value   = if (pvalue_scale == "lp") p_lp else p_d#,
+                                 # P_value_lp        = p_lp,        # for QA
+                                 # P_value_WaldMIC   = p_d
+                                 )
 
     ## Ratio
     lr      <- log_mic[j] - log_mic[i]
-    g_lr    <- g_log_mic[j, ] - g_log_mic[i, ]
-    se_lr   <- sqrt(drop(t(g_lr) %*% vcov_mat %*% g_lr))
+    # g_lr    <- g_log_mic[j, ] - g_log_mic[i, ]
+    g_lr      <- g_log_mic[j, , drop = FALSE] - g_log_mic[i, , drop = FALSE]
+    # se_lr   <- sqrt(drop(t(g_lr) %*% vcov_mat %*% g_lr))
+    se_lr  <- .quadform_se(g_lr,  vcov_mat)
     ci_lr   <- lr + c(-1, 1) * zcrit * se_lr
     p_lr    <- 2 * stats::pnorm(-abs(lr / se_lr))
     out_ratio[[k]] <- data.frame(Group1 = g1, Group2 = g2,
-                                 Ratio_MIC = exp(lr), SE_logRatio = se_lr,
-                                 CI_Lower = exp(ci_lr[1]),
-                                 CI_Upper = exp(ci_lr[2]),
-                                 P_value   = if (pvalue_scale == "lp") p_lp else p_lr,
-                                 P_value_lp        = p_lp,        # for QA
-                                 P_value_WaldMIC   = p_lr)
+                                 Ratio_MIC = exp(lr),
+                                 log2Ratio_MIC = lr / log(2),
+                                 SE_log2Ratio = se_lr / log(2),
+                                 # SE_logRatio = se_lr,
+                                 CI_Lower = (ci_lr[1])/log(2),
+                                 CI_Upper = (ci_lr[2])/log(2),
+                                 P_value   = if (pvalue_scale == "lp") p_lp else p_lr#,
+                                 # P_value_lp        = p_lp,        # for QA
+                                 # P_value_WaldMIC   = p_lr
+                                 )
 
     out_idx <- out_idx + 1L
   }
