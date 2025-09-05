@@ -23,7 +23,7 @@ dod_delta_results – difference‑of‑differences on the additive scale
 
     <a class="navbar-brand me-2" href="../index.html">ordinalMIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -125,20 +125,20 @@ share no covariate levels in <code>newdata</code>..</p></dd>
 <span class="r-in"><span>  <span class="va">res</span> <span class="op">&lt;-</span> <span class="fu">mic_solve</span><span class="op">(</span><span class="va">fit</span>, conc_name <span class="op">=</span> <span class="st">"conc"</span><span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">res</span><span class="op">$</span><span class="va">ratio_mic_results</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>     Group1   Group2 Ratio_MIC SE_logRatio  CI_Lower  CI_Upper      P_value</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1  WT:None Mut:None 0.9977145   0.1778356 0.7040967 1.4137747 9.897342e-01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2  WT:None  WT:Salt 2.2014631   0.1499139 1.6409844 2.9533733 3.220246e-08</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3  WT:None Mut:Salt 1.0831448   0.1769435 0.7657235 1.5321494 6.517634e-01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4 Mut:None  WT:Salt 2.2065061   0.1516742 1.6390788 2.9703692 4.157323e-08</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5 Mut:None Mut:Salt 1.0856261   0.1785414 0.7650777 1.5404762 6.454120e-01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6  WT:Salt Mut:Salt 0.4920114   0.1505724 0.3662754 0.6609103 8.615838e-07</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>     P_value_lp P_value_WaldMIC</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 9.897342e-01    9.897342e-01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2 3.220246e-08    1.410804e-07</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 6.517634e-01    6.517160e-01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4 4.157323e-08    1.810301e-07</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5 6.454120e-01    6.454045e-01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6 8.615838e-07    2.472518e-06</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     Group1   Group2 Ratio_MIC log2Ratio_MIC SE_log2Ratio    CI_Lower</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1  WT:None Mut:None 0.8344990    -0.2610177    0.1252559 -0.50651481</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2  WT:None  WT:Salt 1.6783666     0.7470579    0.1062585  0.53879510</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3  WT:None Mut:Salt 0.9616983    -0.0563437    0.1174861 -0.28661220</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 Mut:None  WT:Salt 2.0112266     1.0080756    0.1176926  0.77740239</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5 Mut:None Mut:Salt 1.1524259     0.2046740    0.1277369 -0.04568565</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6  WT:Salt Mut:Salt 0.5729966    -0.8034016    0.1089813 -1.01700093</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      CI_Upper      P_value</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 -0.01552064 3.634335e-02</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2  0.95532068 1.564368e-12</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3  0.17392479 6.313981e-01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4  1.23874884 1.903759e-18</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5  0.45503369 1.083454e-01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6 -0.58980227 9.204372e-14</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
