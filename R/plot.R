@@ -1,9 +1,15 @@
-utils::globalVariables(
-  c("MIC", "CI_Lower", "CI_Upper", "Delta_MIC", "Ratio_MIC",
-    "Group1", "Group2", "DDlog2MIC", "obs_mic","rep",
-    "censored","max_tested",".conc_raw__","grp_key","visible",
-    ".data","pretty_label","x_simplified")
-)
+utils::globalVariables(c(
+  # results tables
+  "MIC","CI_Lower","CI_Upper","Delta_MIC","Ratio_MIC",
+  "Group1","Group2","DDlog2MIC","x_simplified","facet",
+  # observed MIC assembly / plotting
+  "._conc_raw_","._rep_","._key_","._bar_pos_",
+  "x_val","color_val","y","y_obs","y_cens","cens",
+  "x_center","color_off","rep_offset","x_pos","gkey",
+  # misc
+  ".data","pretty_label","rep","censored","max_tested","visible"
+))
+
 
 #' autoplot method for mic_solve objects
 #'
@@ -538,9 +544,8 @@ autoplot.mic_solve <- function(object,
       else if (!any(r))     "Effect of other"
       else                  paste0("Effect of ", paste(fvars[!r], collapse = "+"))
     })
-    # order: (optional) make "Effect of other" appear first or last as you like
-    tbl$facet <- stats::relevel(as.factor(tbl$facet), ref = "Effect of other")
-    # reverse levels for strip order (optional)
+
+    tbl$facet <- .relevel_if_present(tbl$facet, "Effect of other")
     tbl$facet <- factor(tbl$facet, levels = rev(levels(tbl$facet)))
 
     ## 3) simplified x labels
@@ -653,7 +658,8 @@ autoplot.mic_solve <- function(object,
       else if (!any(r))     "Effect of other"
       else                  paste0("Effect of ", paste(fvars[!r], collapse = "+"))
     })
-    tbl$facet <- stats::relevel(as.factor(tbl$facet), ref = "Effect of other")
+
+    tbl$facet <- .relevel_if_present(tbl$facet, "Effect of other")
     tbl$facet <- factor(tbl$facet, levels = rev(levels(tbl$facet)))
 
     # simplified labels (your revised version is fine)
@@ -730,6 +736,11 @@ autoplot.mic_solve <- function(object,
     tbl  <- object$dod_ratio_results          # usually one row
     fvars <- names(object$newdata)             # e.g. c("strain","treatment")
 
+    if (length(fvars) < 2L) {
+      stop("DoD plots require at least 2 grouping factors.", call. = FALSE)
+    }
+
+
     if (!"label" %in% names(tbl) &&
         all(c("var1","var2","var1_lvlA","var1_lvlB","var2_lvlC","var2_lvlD") %in% names(tbl))) {
       tbl$label <- sprintf("%s: %s vs %s x %s: %s vs %s",
@@ -785,6 +796,10 @@ autoplot.mic_solve <- function(object,
 
     tbl  <- object$dod_delta_results          # usually one row
     fvars <- names(object$newdata)             # e.g. c("strain","treatment")
+
+    if (length(fvars) < 2L) {
+      stop("DoD plots require at least 2 grouping factors.", call. = FALSE)
+    }
 
     if (!"label" %in% names(tbl) &&
         all(c("var1","var2","var1_lvlA","var1_lvlB","var2_lvlC","var2_lvlD") %in% names(tbl))) {

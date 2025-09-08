@@ -30,7 +30,7 @@ mic_solve(
 
 \item{compare_pairs}{One of \code{"all"} (default) to retain every pairwise
 comparison, or \code{"share_any"} to exclude contrasts where the two groups
-share no covariate levels in \code{newdata}..}
+share no covariate levels in \code{newdata}.}
 
 \item{pvalue_scale}{Which pivot the main P_value uses for pairwise tests:
 "lp" (difference in lp = log1p(MIC), recommended for calibration) or

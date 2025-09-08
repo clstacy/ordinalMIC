@@ -383,6 +383,18 @@ if (getRversion() >= "2.15.1") {
   ))
 }
 
+#' Internal: relevel a factor only if the reference level exists
+#'
+#' @param x   A factor or character vector.
+#' @param ref A single character string naming the desired reference level.
+#' @return A factor with the same levels (re-leveled if `ref` exists).
+#' @keywords internal
+#' @noRd
+.relevel_if_present <- function(x, ref) {
+  x <- as.factor(x)
+  if (ref %in% levels(x)) stats::relevel(x, ref = ref) else x
+}
+
 #' Internal imports
 #' @keywords internal
 #' @importFrom stats na.omit

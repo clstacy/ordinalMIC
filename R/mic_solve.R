@@ -16,7 +16,7 @@
 #' @param alpha     Confidence‑level significance (default 0.05).
 #' @param compare_pairs  One of \code{"all"} (default) to retain every pairwise
 #'   comparison, or \code{"share_any"} to exclude contrasts where the two groups
-#'   share no covariate levels in \code{newdata}..
+#'   share no covariate levels in \code{newdata}.
 #' @param pvalue_scale Which pivot the main P_value uses for pairwise tests:
 #'   "lp" (difference in lp = log1p(MIC), recommended for calibration) or
 #'   "logmic" (current Wald on log(MIC) for ratios and MIC scale for deltas).
@@ -67,8 +67,6 @@ mic_solve <- function(clm_fit, newdata = NULL, conc_name,
   trans_name <- paste0(deparse(substitute(transform_fun)), "(", conc_name, ")")
   raw_name   <- conc_name
 
-
-
   if (trans_name %in% beta_names) {
     conc_term <- trans_name
   } else if (raw_name %in% beta_names) {
@@ -90,6 +88,12 @@ mic_solve <- function(clm_fit, newdata = NULL, conc_name,
   mic_df <- cbind(newdata, MIC = res$mic, SE_LP = res$se_lp,
                   CI_Lower = inv_transform_fun(res$lp - zcrit * res$se_lp),
                   CI_Upper = inv_transform_fun(res$lp + zcrit * res$se_lp))
+
+  # If there is fewer than 2 grouping factors, 'share_any' cannot produce pairs.
+  if (identical(compare_pairs, "share_any") && length(names(newdata)) < 2L) {
+    warning("compare_pairs = 'share_any' requires at least 2 grouping factors; using 'all' instead.", call. = FALSE)
+    compare_pairs <- "all"
+  }
 
   if (compare_pairs == "share_any") {
     cmb <- utils::combn(seq_len(nrow(newdata)), 2)
