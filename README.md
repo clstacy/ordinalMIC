@@ -6,8 +6,7 @@ Minimum Inhibitory Concentration (MIC*) Estimation and groupwise comparisons fro
 
 > Companion Website: <https://LewisLabUARK.github.io/MICalculator/>
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17123352
-.svg)](https://doi.org/10.5281/zenodo.17123352)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17123352.svg)](https://doi.org/10.5281/zenodo.17123352)
 
 ## Purpose
 
