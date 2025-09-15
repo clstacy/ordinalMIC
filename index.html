@@ -44,8 +44,218 @@
   </div>
 </nav><div class="container template-home">
 <div class="row">
-  <main id="main" class="col-md-9">
-Provides tools to estimate minimum inhibitory concentration (MIC) and conduct rigorous pairwise comparisons (delta, fold‑change, and difference of difference tests) from cumulative‑link models fitted with 'ordinal::clm'.
+  <main id="main" class="col-md-9"><div class="section level1">
+<div class="page-header"><h1 id="ordinalmic">ordinalMIC<a class="anchor" aria-label="anchor" href="#ordinalmic"></a>
+</h1></div>
+<p>Minimum Inhibitory Concentration (MIC*) Estimation and groupwise comparisons from proportional-odds ordinal regression models.</p>
+<blockquote>
+<p>Package website: <a href="https://clstacy.github.io/ordinalMIC/" class="uri">https://clstacy.github.io/ordinalMIC/</a> Companion Website: <a href="https://LewisLabUARK.github.io/MICalculator/" class="external-link uri">https://LewisLabUARK.github.io/MICalculator/</a></p>
+</blockquote>
+<p><a href="https://doi.org/10.5281/zenodo.17123352" class="external-link"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.17123352%20.svg" alt="DOI"></a></p>
+<div class="section level2">
+<h2 id="purpose">Purpose<a class="anchor" aria-label="anchor" href="#purpose"></a>
+</h2>
+<p>Microbiological assays often record growth on an ordered score scale (e.g., 0–4) across concentrations. Treating these scores as binary or continuous can lead to inaccurate conclusions. <code>ordinalMIC</code> turns cumulative-link models (<code><a href="https://rdrr.io/pkg/ordinal/man/clm.html" class="external-link">ordinal::clm</a></code>) into <strong>interpretable concentration-scale summaries</strong>:</p>
+<ul>
+<li>
+<strong>MIC*</strong> per group (the concentration where predicted probability of “no growth” is 50%)</li>
+<li>
+<strong>Δ-MIC*</strong> (additive differences)</li>
+<li>
+<strong>MIC* ratio</strong> (fold-change)</li>
+<li>
+<strong>Difference-of-differences (DoD)</strong> on <strong>additive</strong> and <strong>ratio</strong> scales to test interactions</li>
+</ul>
+<p>It also provides compact output tables, a <code><a href="https://ggplot2.tidyverse.org/reference/autoplot.html" class="external-link">ggplot2::autoplot()</a></code> for quick figures generation.</p>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
+<div class="section level3">
+<h3 id="stable-from-r-universe">Stable (from r-universe)<a class="anchor" aria-label="anchor" href="#stable-from-r-universe"></a>
+</h3>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"ordinalMIC"</span>, repos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"https://clstacy.r-universe.dev"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="from-source-tarball">From source tarball<a class="anchor" aria-label="anchor" href="#from-source-tarball"></a>
+</h3>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"ordinalMIC_1.0.0.tar.gz"</span>, repos <span class="op">=</span> <span class="cn">NULL</span>, type <span class="op">=</span> <span class="st">"source"</span><span class="op">)</span></span></code></pre></div>
+<hr>
+</div>
+</div>
+<div class="section level2">
+<h2 id="dependencies">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies"></a>
+</h2>
+<ul>
+<li>Required: <code>ggplot2</code>, <code>stats</code>, <code>utils</code>, <code>cli</code>, <code>tibble</code>, R (&gt;= 4.1)</li>
+<li>Suggested: <code>ordinal</code> for modeling</li>
+</ul>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="core-idea">Core Idea<a class="anchor" aria-label="anchor" href="#core-idea"></a>
+</h2>
+<p>Fit a proportional-odds ordinal regression to your scored outcomes across concentration. Then use <code><a href="reference/mic_solve.html">mic_solve()</a></code> to:</p>
+<ol style="list-style-type: decimal">
+<li>Compute group-specific MIC* on the original concentration scale (using your chosen transform/inverse).</li>
+<li>Compare groups by ΔMIC* and MIC ratios with CIs and p-values.</li>
+<li>Test interactions via difference-of-differences (additive and ratio scales).</li>
+</ol>
+<p>Default transform is <code>log1p</code> for concentration; override if your model uses a different link-side transform.</p>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="quick-start">Quick Start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
+</h2>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://clstacy.github.io/ordinalMIC/">ordinalMIC</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Example data included with the package</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">yeast_df</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Fit a proportional-odds model (requires 'ordinal' package)</span></span>
+<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu">ordinal</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/ordinal/man/clm.html" class="external-link">clm</a></span><span class="op">(</span><span class="va">score</span> <span class="op">~</span> <span class="va">strain</span> <span class="op">*</span> <span class="va">treatment</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log1p</a></span><span class="op">(</span><span class="va">conc</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">yeast_df</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Estimate MIC* and compare groups</span></span>
+<span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/mic_solve.html">mic_solve</a></span><span class="op">(</span></span>
+<span>  clm_fit    <span class="op">=</span> <span class="va">fit</span>,</span>
+<span>  conc_name  <span class="op">=</span> <span class="st">"conc"</span>,</span>
+<span>  transform_fun     <span class="op">=</span> <span class="va">log1p</span>,</span>
+<span>  inv_transform_fun <span class="op">=</span> <span class="va">expm1</span>,</span>
+<span>  alpha      <span class="op">=</span> <span class="fl">0.05</span>,</span>
+<span>  compare_pairs <span class="op">=</span> <span class="st">"all"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Tables</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="reference/tidy.mic_solve.html">tidy.mic_solve</a></span><span class="op">(</span><span class="va">res</span>, table <span class="op">=</span> <span class="st">"mic"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="reference/tidy.mic_solve.html">tidy.mic_solve</a></span><span class="op">(</span><span class="va">res</span>, table <span class="op">=</span> <span class="st">"ratio"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Plots</span></span>
+<span><span class="fu">ggplot2</span><span class="fu">::</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/autoplot.html" class="external-link">autoplot</a></span><span class="op">(</span><span class="va">res</span>, type <span class="op">=</span> <span class="st">"mic"</span><span class="op">)</span></span></code></pre></div>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="main-functions">Main functions<a class="anchor" aria-label="anchor" href="#main-functions"></a>
+</h2>
+<p><code><a href="reference/mic_solve.html">mic_solve()</a></code></p>
+<ul>
+<li>Inputs: fitted <code><a href="https://rdrr.io/pkg/ordinal/man/clm.html" class="external-link">ordinal::clm</a></code>, newdata, conc_name, transform/inverse functions</li>
+<li>Outputs: MICs, Δ-MIC, ratios, DoD summaries, all with CIs and p-values</li>
+</ul>
+<p><code>ggplot2::autoplot.mic_solve()</code></p>
+<ul>
+<li>Quick visualization of MICs, Δ-MICs, ratios, DoDs</li>
+</ul>
+<p><code><a href="reference/tidy.mic_solve.html">tidy.mic_solve()</a></code></p>
+<ul>
+<li>Extracts summary tables for MICs, Δ-MICs, ratios, DoDs as tibble objects</li>
+</ul>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="data">Data<a class="anchor" aria-label="anchor" href="#data"></a>
+</h2>
+<p>Example dataset <code>yeast_df</code> included with the package:</p>
+<table class="table">
+<thead><tr class="header">
+<th align="left">Column</th>
+<th align="left">Type</th>
+<th align="left">Description</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>strain</code></td>
+<td align="left">factor</td>
+<td align="left">Yeast strain (WT, Mut)</td>
+</tr>
+<tr class="even">
+<td align="left"><code>treatment</code></td>
+<td align="left">factor</td>
+<td align="left">Treatment type (None, Salt)</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>conc</code></td>
+<td align="left">numeric</td>
+<td align="left">Concentration (e.g., drug concentration)</td>
+</tr>
+<tr class="even">
+<td align="left"><code>score</code></td>
+<td align="left">ordered</td>
+<td align="left">Growth score (0 = no growth, 4 = full growth)</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>rep</code></td>
+<td align="left">factor</td>
+<td align="left">Replicate identifier</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="modeling-guidance">Modeling guidance<a class="anchor" aria-label="anchor" href="#modeling-guidance"></a>
+</h2>
+<ul>
+<li>Outcome must be an ordered factor with levels increasing in severity</li>
+<li>Transform concentration (default <code>log1p</code>); supply both transform and inverse</li>
+<li>
+<code>newdata</code> gives groups to estimate MIC*, automatically generated if not given.</li>
+<li>Use DoD (Difference of Difference) summaries to interpret interaction effects on MIC*</li>
+</ul>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="mic-definition">MIC definition<a class="anchor" aria-label="anchor" href="#mic-definition"></a>
+</h2>
+<p>MIC is the concentration where the predicted probability of “no growth” equals 0.5, computed from the fitted clm.</p>
+<ul>
+<li><p>MIC ratios: differences in predicted log-MIC</p></li>
+<li><p>DoD ratios: ratio-of-ratios (interaction on log scale)</p></li>
+</ul>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="troubleshooting">Troubleshooting<a class="anchor" aria-label="anchor" href="#troubleshooting"></a>
+</h2>
+<ul>
+<li>
+<strong>Outcome not ordered</strong>: convert with <code><a href="https://rdrr.io/r/base/factor.html" class="external-link">ordered()</a></code>
+</li>
+<li>
+<strong>Transform mismatch</strong>: supply correct transform/inverse</li>
+<li>
+<strong>No Estimate for MIC</strong>: reconsider dose range (censored results/no change observed)</li>
+<li>
+<strong>Comparisons</strong>: restrict with <code>compare_pairs = "share_any"</code>
+</li>
+</ul>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
+</h2>
+<p>If you use <code>ordinalMIC</code> in published research, please cite: Stacy C (2025). ordinalMIC: Minimum Inhibitory Concentration Estimation from Ordinal Regression Models. R package version 1.0.0, <a href="https://clstacy.github.io/ordinalMIC/" class="uri">https://clstacy.github.io/ordinalMIC/</a>.</p>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="contributing">Contributing<a class="anchor" aria-label="anchor" href="#contributing"></a>
+</h2>
+<ul>
+<li>Issues/PRs: <a href="https://github.com/clstacy/ordinalMIC/" class="external-link uri">https://github.com/clstacy/ordinalMIC/</a>
+</li>
+<li>Include <code><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo()</a></code> and minimal example for bug reports</li>
+</ul>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
+</h2>
+<p>MIT License. See <code>LICENSE</code> file for details.</p>
+</div>
+</div>
   </main><aside class="col-md-3"><div class="license">
 <h2 data-toc-skip>License</h2>
 <ul class="list-unstyled">
