@@ -3,6 +3,7 @@
 Minimum Inhibitory Concentration (MIC*) Estimation and groupwise comparisons from proportional-odds ordinal regression models.
 
 > Package website: <https://clstacy.github.io/ordinalMIC/>
+
 > Companion Website: <https://LewisLabUARK.github.io/MICalculator/>
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17123352
